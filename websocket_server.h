@@ -24,7 +24,21 @@ class WebsocketServer {
         void acceptConnection();
 
         //FUncion para finalizar la conexion
-        void closeConnection(const std::string& client_id);
+        void closeConnection(const std::string& client_id){
+            auto it = clients_.find(client_id);
+            if (it != clients_.end()){
+                boost::system::error_code ec;
+                it->second.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+                if (ec) {
+                    std::cerr << "Error de cierre: " << ec.message() << std::endl;
+                }
+                it->second.close();
+                clients_.erase(it);
+                desactivateUser(client_id);
+                notifyAllClients(client_id + "Ha abandonado el chat")
+            }
+        };
+
 
         //Funcion para leer mensajes
         void readMessages(const std::string& client_id);

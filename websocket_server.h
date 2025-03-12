@@ -44,10 +44,20 @@ class WebsocketServer {
         void readMessages(const std::string& client_id);
 
         //FUncion para cambiar el estado a Desactivado
-        void desactivateUser(const std::string& client_id);
+        void desactivateUser(const std::string& client_id){
+            //aun no se en donde almacenamos el estado de los usuarios
+        };
 
         //Funcion para notificar al resto
-        void notifyAllClients(const std::string& message);
+        void notifyAllClients(const std::string& message){
+            for (auto& client : clients_){
+                boost::asio::async_write(client.second, boost::asio::buffer(message),[](const boost::system::error_code& ec, std::size_t){
+                    if (ec) {
+                        std::cerr << "Error al enviar la notificacion: " << ec.message() << std::endl;
+                    }
+                }
+            }
+        };
 };
 
 #endif

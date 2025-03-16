@@ -25,6 +25,7 @@ struct UserInfo {
     std::string username;
     std::shared_ptr<websocket::stream<tcp::socket>> ws;
     bool isActive;
+    std::string ipAddress;
 };
 
 std::string bytesToHexString(const std::vector<unsigned char>& data) {
@@ -59,6 +60,10 @@ std::string extractUsername(const std::string& target) {
     return "";
 }
 
+std::string extractUserIpAddress(const tcp::socket& socket) {
+    return socket.remote_endpoint().address().to_string();
+}
+
 // Envía un mensaje de texto a todos los clientes conectados
 void broadcastTextMessage(const std::string& message) {
     std::lock_guard<std::mutex> lock(clients_mutex);
@@ -70,6 +75,34 @@ void broadcastTextMessage(const std::string& message) {
     }
 }
 
+// Notificar a todos los clientes con ID 53
+void broadcastUserJoined(const std::string& username, const std::string& ipAddress) {
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    for (auto& [user, info] : connectedUsers) {
+        if (info.isActive && !username.empty()) {
+            // Construir el mensaje con el ID 53
+            auto binMsg = buildBinaryMessage(MessageCode::USER_REGISTERED, {
+                std::vector<unsigned char>(username.begin(), username.end()),
+                std::vector<unsigned char>(ipAddress.begin(), ipAddress.end())
+            });
+            sendBinaryMessage(info.ws, binMsg);  // Enviar el mensaje binario
+        }
+    }
+}
+
+// Notificar a todos los clientes con ID 54 cuando un usuario se desconecta
+void broadcastUserDisconnected(const std::string& username) {
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    for (auto& [user, info] : connectedUsers) {
+        if (info.isActive && !username.empty()) {
+            // Construir el mensaje con el ID 54
+            auto binMsg = buildBinaryMessage(MessageCode::USER_STATUS_CHANGED, {
+                std::vector<unsigned char>(username.begin(), username.end())
+            });
+            sendBinaryMessage(info.ws, binMsg);  // Enviar el mensaje binario
+        }
+    }
+}
 
 // Manejo de la conexión de un cliente mediante WebSockets
 void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::string username) {
@@ -214,6 +247,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
 
         }
 
+        broadcastUserDisconnected(username);
         broadcastTextMessage("Usuario " + username + " se ha desconectado.");
 
     } catch (const std::exception& e) {
@@ -226,6 +260,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
 
 
         }
+        broadcastUserDisconnected(username);
         broadcastTextMessage("Usuario " + username + " se ha desconectado.");
     }
 }

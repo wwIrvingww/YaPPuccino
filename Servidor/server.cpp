@@ -212,6 +212,8 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                         }
                         std::string dest(pm.fields[0].begin(), pm.fields[0].end());
                         std::string message(pm.fields[1].begin(), pm.fields[1].end());
+                        std::string mensajeTexto = username + ": " + message;
+
                         if (message.empty())
                         {
                             auto errMsg = buildBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
@@ -254,10 +256,13 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                             }
                         }
 
-                        std::string mensajeTexto = username + ": " + message;
-                        std::cout << "Mensaje parseado a texto: " << mensajeTexto << std::endl;
 
-                        broadcastTextMessage(mensajeTexto);
+                        if (dest == "~"){
+                            std::cout << "→ Mensaje de " << username << " enviado al chat general: " << message << std::endl;    
+                            broadcastTextMessage(mensajeTexto);
+                        } else {
+                            std::cout << "→ Mensaje de " << username << " enviado a " << dest << ": " << message << std::endl;
+                        }
 
                         break;
                     }
@@ -362,7 +367,7 @@ int main()
 
             {
                 std::lock_guard<std::mutex> lock(clients_mutex);
-                if (connectedUsers.count(username) && connectedUsers[username].status == UserStatus::ACTIVE || connectedUsers[username].status == UserStatus::BUSY)
+                if (connectedUsers.count(username) && (connectedUsers[username].status == UserStatus::ACTIVE || connectedUsers[username].status == UserStatus::BUSY))
                 {
                     http::response<http::string_body> res{http::status::bad_request, req.version()};
                     res.set(http::field::content_type, "text/plain");

@@ -12,6 +12,7 @@
 #include <boost/beast.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/beast/http.hpp>
+#include <chrono> 
 #include "BinaryMessageHandler.h"
 
 namespace asio = boost::asio;
@@ -28,6 +29,19 @@ enum class UserStatus : uint8_t
     BUSY = 2,
     INACTIVE = 3
 };
+
+static std::string userStatusToString(UserStatus s)
+{
+    switch(s)
+    {
+        case UserStatus::DISCONNECTED: return "DESACTIVADO";
+        case UserStatus::ACTIVE:       return "ACTIVO";
+        case UserStatus::BUSY:         return "OCUPADO";
+        case UserStatus::INACTIVE:     return "INACTIVO";
+    }
+    return "DESCONOCIDO";
+}
+
 // Estructura para almacenar la información de cada usuario
 struct UserInfo
 {
@@ -35,6 +49,10 @@ struct UserInfo
     std::shared_ptr<websocket::stream<tcp::socket>> ws;
     UserStatus status;
     std::string ipAddress;
+
+    std::chrono::steady_clock::time_point lastActivityTime; // Última vez en que un usuario mandó un mensaje 
+
+    UserStatus previousState; // Estado anterior del usuario
 };
 
 std::string bytesToHexString(const std::vector<unsigned char> &data)
@@ -125,6 +143,64 @@ void broadcastUserDisconnected(const std::string &username)
     }
 }
 
+// Notificar a todos los clientes con ID 54 cuando un usuario cambia de estado
+void broadcastUserStatusChanged(const std::string &username, UserStatus newStatus)
+{
+    std::lock_guard<std::mutex> lock(clients_mutex);
+
+    // Campos a enviar: [Username] [Status en 1 byte]
+    std::vector<unsigned char> userField(username.begin(), username.end());
+    std::vector<unsigned char> statusField(1, static_cast<unsigned char>(newStatus));
+
+    auto binMsg = buildBinaryMessage(
+        MessageCode::USER_STATUS_CHANGED, // 54
+        { userField, statusField }
+    );
+
+    // Solo se notifica a usuarios en ACTIVE o BUSY
+    for (auto &[user, info] : connectedUsers)
+    {
+        if ((info.status == UserStatus::ACTIVE || info.status == UserStatus::BUSY) && !username.empty())
+        {
+            sendBinaryMessage(info.ws, binMsg);
+        }
+    }
+}
+
+// Cambiar el estado de un usuario y notificar a los demás
+void setUserStatus(const std::string &username, UserStatus newStatus)
+{
+    if (!connectedUsers.count(username)) return;
+
+    auto &info = connectedUsers[username];
+    if (info.status == newStatus)
+    {
+        // Si no hay cambio, no hacemos nada
+        return;
+    }
+
+    // Actualizamos el estado anterior solo si el nuevo no es DISCONNECTED
+    // (así recordamos el último estado "real" para la reconexión)
+    if (newStatus != UserStatus::DISCONNECTED)
+    {
+        info.previousState = newStatus;
+    }
+
+    info.status = newStatus;
+
+    // 1) Notificar por binario (ID 54)
+    broadcastUserStatusChanged(username, newStatus);
+
+    // 2) Notificar por texto: "Usuario X se ha cambiado a estado Y"
+    std::string statusStr = userStatusToString(newStatus);
+    broadcastTextMessage("Usuario " + username + " se ha cambiado a estado " + statusStr);
+}
+
+void markUserDisconnected(const std::string &username)
+{
+    setUserStatus(username, UserStatus::DISCONNECTED);
+}
+
 // Manejo de la conexión de un cliente mediante WebSockets
 void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::string username)
 {
@@ -132,15 +208,59 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
     {
         {
             std::lock_guard<std::mutex> lock(clients_mutex);
-            // Si el usuario ya existe, se reactivará poniendo el estado a ACTIVE.
-            if (connectedUsers.find(username) != connectedUsers.end())
+            
+            auto it = connectedUsers.find(username);
+            if (it != connectedUsers.end())
             {
-                connectedUsers[username].status = UserStatus::ACTIVE;
+                // El usuario ya existía
+                auto &info = it->second;
+
+                // Si estaba DISCONNECTED, volvemos al estado anterior
+                if (info.status == UserStatus::DISCONNECTED)
+                {
+                    // Regresamos al estado que tenía antes de desconectarse
+                    // (Si era INACTIVE, se vuelve ACTIVE según tu regla)
+                    if (info.previousState == UserStatus::BUSY)
+                    {
+                        setUserStatus(username, UserStatus::BUSY);
+                    }
+                    else if (info.previousState == UserStatus::ACTIVE)
+                    {
+                        setUserStatus(username, UserStatus::ACTIVE);
+                    }
+                    else if (info.previousState == UserStatus::INACTIVE)
+                    {
+                        setUserStatus(username, UserStatus::ACTIVE);
+                    }
+                    else
+                    {
+                        // Por defecto, si no teníamos nada, lo ponemos en ACTIVE
+                        setUserStatus(username, UserStatus::ACTIVE);
+                    }
+                }
+                // Si no estaba DISCONNECTED, no forzamos nada. (Si estaba BUSY, se queda BUSY,
+                // si estaba ACTIVE, se queda ACTIVE, etc.)
+
+                // Actualizamos el socket y la hora de actividad
+                info.ws = ws;
+                info.lastActivityTime = std::chrono::steady_clock::now();
             }
             else
             {
-                // Registrar usuario nuevo con estado ACTIVE.
-                connectedUsers[username] = {username, ws, UserStatus::ACTIVE, extractUserIpAddress(ws->next_layer())};
+                // Usuario nuevo, lo creamos por primera vez
+                UserInfo newUser {
+                    username,
+                    ws,
+                    UserStatus::ACTIVE, // estado inicial
+                    extractUserIpAddress(ws->next_layer()),
+                    std::chrono::steady_clock::now(),
+                    UserStatus::ACTIVE // previousState inicial
+                };
+                connectedUsers[username] = newUser;
+
+                // Notificamos su estado inicial (ACTIVO)
+                setUserStatus(username, UserStatus::ACTIVE);
+                
             }
         }
 
@@ -160,6 +280,37 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
             buffer.consume(buffer.size());
             ws->read(buffer);
 
+            {
+                // Usamos un lock temporal solo para obtener la información necesaria
+                bool needReactivation = false;
+                {
+                    std::lock_guard<std::mutex> lock(clients_mutex);
+                    auto &info = connectedUsers[username];
+                    info.lastActivityTime = std::chrono::steady_clock::now();
+
+                    // Imprimir estado actual para depuración
+                    std::cout << "Estado actual de " << username << ": " 
+                            << userStatusToString(info.status) << std::endl;
+
+                    if (info.status == UserStatus::INACTIVE)
+                    {
+                        needReactivation = true;
+                    }
+                } // Aquí se libera el mutex
+
+                if (needReactivation)
+                {
+                    std::cout << "Reactivando usuario " << username << std::endl;
+                    // Reactivamos al usuario; setUserStatus internamente adquiere el mutex
+                    setUserStatus(username, UserStatus::ACTIVE);
+
+                    // Ahora, fuera del mutex, enviar un mensaje directo al cliente para confirmar la reactivación
+                    ws->binary(false);
+                    std::string reactivationMsg = "Se ha reactivado el estado de " + username + " a ACTIVO.";
+                    ws->write(asio::buffer(reactivationMsg));
+                }
+            }
+
             // Diferenciar si el mensaje recibido es de texto o binario
             if (ws->got_text())
             {
@@ -176,6 +327,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                     cr.code = websocket::close_code::normal;
                     cr.reason = "El usuario solicitó desconexión voluntaria";
                     ws->close(cr);
+                    ws->next_layer().close();
                     break;
                 }
                 std::cout << "Mensaje de texto recibido de " << username << ": " << msg << std::endl;
@@ -246,7 +398,6 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                                 auto binOut = buildBinaryMessage(MessageCode::MESSAGE_RECEIVED, {std::vector<unsigned char>(username.begin(), username.end()),
                                                                                                  std::vector<unsigned char>(message.begin(), message.end())});
                                 sendBinaryMessage(connectedUsers[dest].ws, binOut);
-                                // También se envía una copia al remitente
                                 sendBinaryMessage(ws, binOut);
                             }
                             else
@@ -289,6 +440,19 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                         break;
                     }
 
+                    case MessageCode::CHANGE_STATUS:
+                    {
+
+                        if (pm.fields.size() < 2 || pm.fields[0].empty() || pm.fields[1].empty())
+                            break;
+
+                        std::string targetUser(pm.fields[0].begin(), pm.fields[0].end());
+                        UserStatus newStatus = static_cast<UserStatus>(pm.fields[1][0]);
+
+                        setUserStatus(targetUser, newStatus);
+                        break;
+                    }
+
                     default:
                     {
                         std::cout << "Código de mensaje binario no reconocido: " << (int)pm.code << std::endl;
@@ -311,13 +475,11 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
             std::lock_guard<std::mutex> lock(clients_mutex);
             if (connectedUsers.count(username))
             {
-                connectedUsers[username].status = UserStatus::DISCONNECTED;
-                // connectedUsers.erase(username); CREO QUE ESTO YA NO ES NECESARIO, PERO CUALQUIER COSA LO DEJO COMENTADO. IGUAL LO DE ABAJO
+                setUserStatus(username, UserStatus::DISCONNECTED);
+                connectedUsers[username].ws.reset();
             }
-
-            // broadcastUserDisconnected(username);
-            // broadcastTextMessage("Usuario " + username + " se ha desconectado.");
         }
+        broadcastTextMessage("Usuario " + username + " se ha desconectado.");
     }
     catch (const std::exception &e)
     {
@@ -325,10 +487,11 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
         {
             std::lock_guard<std::mutex> lock(clients_mutex);
             if (connectedUsers.count(username))
-                connectedUsers[username].status = UserStatus::INACTIVE;
-            connectedUsers.erase(username);
+            {
+                setUserStatus(username, UserStatus::DISCONNECTED);
+                connectedUsers[username].ws.reset();
+            }
         }
-        broadcastUserDisconnected(username);
         broadcastTextMessage("Usuario " + username + " se ha desconectado.");
     }
 }
@@ -341,6 +504,44 @@ int main()
         tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), 5000));
 
         std::cout << "Servidor WebSockets en ws://localhost:5000" << std::endl;
+
+        const int INACTIVITY_THRESHOLD = 25;
+
+        std::thread([&]{
+            while (true)
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(5)); // cada 5 seg
+                std::vector<std::string> usersToSetInactive;  // lista de usuarios a actualizar
+        
+                {
+                    std::lock_guard<std::mutex> lock(clients_mutex);
+                    auto now = std::chrono::steady_clock::now();
+        
+                    for (auto &[u, info] : connectedUsers)
+                    {
+                        // Solo los que están en ACTIVE o BUSY se vuelven INACTIVE tras X seg
+                        if (info.status == UserStatus::ACTIVE || info.status == UserStatus::BUSY)
+                        {
+                            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                                now - info.lastActivityTime
+                            ).count();
+        
+                            if (elapsed >= INACTIVITY_THRESHOLD)
+                            {
+                                usersToSetInactive.push_back(u);
+                            }
+                        }
+                    }
+                }
+        
+                // Fuera del lock, se actualiza el estado para cada usuario identificado.
+                for (const auto &username : usersToSetInactive)
+                {
+                    setUserStatus(username, UserStatus::INACTIVE);
+                    std::cout << "Usuario " << username << " pasó a INACTIVE por inactividad.\n";
+                }
+            }
+        }).detach();
 
         while (true)
         {
@@ -367,28 +568,36 @@ int main()
 
             {
                 std::lock_guard<std::mutex> lock(clients_mutex);
-                if (connectedUsers.count(username) && (connectedUsers[username].status == UserStatus::ACTIVE || connectedUsers[username].status == UserStatus::BUSY))
+                if (connectedUsers.count(username))
                 {
-                    http::response<http::string_body> res{http::status::bad_request, req.version()};
-                    res.set(http::field::content_type, "text/plain");
-                    res.body() = "Usuario ya conectado";
-                    res.prepare_payload();
-                    http::write(*socket, res);
-                    continue;
+                    auto &info = connectedUsers[username];
+                    // Si el usuario NO está en estado DISCONNECTED y el socket existe y está abierto, se rechaza la conexión.
+                    if (info.status != UserStatus::DISCONNECTED && info.ws && info.ws->next_layer().is_open())
+                    {
+                        http::response<http::string_body> res{http::status::bad_request, req.version()};
+                        res.set(http::field::content_type, "text/plain");
+                        res.body() = "Usuario ya conectado";
+                        res.prepare_payload();
+                        http::write(*socket, res);
+                        continue;
+                    }
                 }
-            }
+            }                 
 
             // Crear un hilo para manejar la conexión del cliente
             std::thread([socket, req, username]() mutable
-                        {
-                try {
+            {
+                try 
+                {
                     auto ws = std::make_shared<websocket::stream<tcp::socket>>(std::move(*socket));
                     ws->accept(req);
                     handleClient(ws, username);
-                } catch (const std::exception& e) {
+                } 
+                catch (const std::exception& e) 
+                {
                     std::cerr << "Error en el hilo para " << username << ": " << e.what() << std::endl;
-                } })
-                .detach();
+                } 
+            }).detach();
         }
     }
     catch (const std::exception &e)

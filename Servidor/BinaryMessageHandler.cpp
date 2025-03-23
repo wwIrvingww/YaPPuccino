@@ -8,13 +8,7 @@
 std::vector<unsigned char> buildBinaryMessage(uint8_t code, const std::vector<std::vector<unsigned char>>& fields) {
     std::vector<unsigned char> message;
 
-    std::ostringstream oss;
-    oss << std::setw(2) << std::setfill('0') << static_cast<int>(code);
-    std::string codeStr = oss.str();
-    // Insertar cada dígito como byte
-    for (char c : codeStr) {
-        message.push_back(static_cast<unsigned char>(c));
-    }
+    message.push_back(code); 
 
     for (const auto& field : fields) {
         if (field.size() > 255) {

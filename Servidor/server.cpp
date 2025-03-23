@@ -14,6 +14,7 @@
 #include <boost/beast/http.hpp>
 #include <chrono> 
 #include "BinaryMessageHandler.h"
+#include "HistoryManager.h"
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
@@ -380,6 +381,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                     break;
                 }
                 std::cout << "Mensaje de texto recibido de " << username << ": " << msg << std::endl;
+                appendToHistory(username, msg);
                 broadcastTextMessage(username + ": " + msg);
             }
             else
@@ -413,6 +415,9 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                         }
                         std::string dest(pm.fields[0].begin(), pm.fields[0].end());
                         std::string message(pm.fields[1].begin(), pm.fields[1].end());
+
+                        appendToHistory(username, message);
+
                         std::string mensajeTexto = username + ": " + message;
 
                         if (message.empty())
@@ -436,7 +441,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                                 {
                                     auto binOut = buildBinaryMessage(MessageCode::MESSAGE_RECEIVED, {std::vector<unsigned char>(username.begin(), username.end()),
                                                                                                      std::vector<unsigned char>(message.begin(), message.end())});
-                                    // sendBinaryMessage(info.ws, binOut);
+                                    sendBinaryMessage(info.ws, binOut);
                                 }
                             }
                         }
@@ -498,6 +503,45 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                         sendBinaryMessage(ws, responseMsg);
 
                         std::cout << "→ Enviado listado de " << connectedUsers.size() << " usuarios a " << username << "\n";
+                        break;
+                    }
+
+                    case MessageCode::GET_HISTORY:
+                    {
+                        // 1) Cargar los pares <usuario, mensaje> del archivo
+                        auto history = loadHistory();
+
+                        // 2) Construir el vector de campos
+                        //    El primer campo: [Num Mensajes] en 1 byte
+                        //    Luego, para cada mensaje: 2 campos [Usuario], [Mensaje]
+                        std::vector<std::vector<unsigned char>> fields;
+
+                        // Ojo: si tu buildBinaryMessage asume [NumFields], [LenCampo], etc.
+                        // revisa que no haya límite de 1 byte. Si hay +50, cabe en un byte? 
+                        // 50 < 256, así que está bien.
+                        fields.push_back({ static_cast<unsigned char>(history.size()) });
+
+                        for (auto &hm : history)
+                        {
+                            // hm.first  = user
+                            // hm.second = mensaje
+                            fields.push_back(
+                                std::vector<unsigned char>(hm.first.begin(), hm.first.end())
+                            );
+                            fields.push_back(
+                                std::vector<unsigned char>(hm.second.begin(), hm.second.end())
+                            );
+                        }
+
+                        // 3) Construir el mensaje binario con código 56
+                        auto responseMsg = buildBinaryMessage(MessageCode::RESPONSE_HISTORY, fields);
+
+                        // 4) Enviarlo al cliente que hizo la petición
+                        sendBinaryMessage(ws, responseMsg);
+
+                        std::cout << "→ Historial de " << history.size() 
+                                << " mensajes enviado a " << username << std::endl;
+
                         break;
                     }
 

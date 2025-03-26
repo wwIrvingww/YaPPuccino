@@ -4,6 +4,7 @@
 #include <QUrl>
 #include <QDebug>
 #include <QTextBrowser>
+#include <QStringListModel>
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -12,6 +13,10 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+    userModel = new QStringListModel(this);
+    ui->listView->setModel(userModel);
+
+    connect(&socket, &QWebSocket::binaryMessageReceived, this, &MainWindow::onBinaryMessageReceived);
     connect(&socket, &QWebSocket::connected, this, &MainWindow::onConnected);
     connect(&socket, &QWebSocket::disconnected, this, &MainWindow::onDisconnected);
     connect(&socket, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::errorOccurred),
@@ -60,6 +65,9 @@ void MainWindow::onConnected()
 {
     ui->statusbar->showMessage("Conectado ✅");
     QMessageBox::information(this, "Conexión", "Conectado correctamente al servidor.");
+    QByteArray request;
+    request.append(char(52));
+    socket.sendBinaryMessage(request);
 }
 
 void MainWindow::onErrorOccurred(QAbstractSocket::SocketError)
@@ -107,4 +115,43 @@ void MainWindow::onTextMessageReceived(const QString &message)
         );
 
 }
+
+void MainWindow::onBinaryMessageReceived(const QByteArray &data)
+{
+    const auto bytes = reinterpret_cast<const unsigned char*>(data.constData());
+    int pos = 0;
+    uint8_t code = bytes[pos++];
+
+    // Sólo manejamos códigos 53 (USER_REGISTERED) y 54 (USER_STATUS_CHANGED)
+    if (code != 53 && code != 54)
+        return;
+
+    // Leer nombre
+    uint8_t nameLen = bytes[pos++];
+    QString username = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), nameLen);
+    pos += nameLen;
+
+    // Determinar nuevo estado
+    QString newState;
+    if (code == 53) {
+        newState = "ACTIVO";
+    } else {
+        uint8_t stateCode = bytes[pos++];
+        switch(stateCode) {
+        case 1: newState = "ACTIVO"; break;
+        case 2: newState = "OCUPADO"; break;
+        case 3: newState = "INACTIVO"; break;
+        default: newState = "DESCONOCIDO";
+        }
+    }
+
+    // Actualizar modelo
+    userStates[username] = newState;
+    QStringList rows;
+    for(auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
+        rows << QString("%1 — %2").arg(it.key(), it.value());
+    }
+    userModel->setStringList(rows);
+}
+
 

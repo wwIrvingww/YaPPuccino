@@ -27,11 +27,15 @@ private slots:
     void onDisconnected();
     void on_enviarMsgGeneral_clicked();
     void onTextMessageReceived(const QString &message);
+    void onBinaryMessageReceived(const QByteArray &data);
+
 
 private:
     Ui::MainWindow *ui;
     QWebSocket socket;
     QNetworkAccessManager http;
     QString currentUser;
+    QStringListModel *userModel;
+    QHash<QString, QString> userStates;
 };
 #endif // MAINWINDOW_H

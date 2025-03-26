@@ -669,15 +669,29 @@ int main()
             beast::flat_buffer buffer;
             http::request<http::string_body> req;
             http::read(*socket, buffer, req);
+            std::string target = req.target().to_string();
+            std::string username = extractUsername(target);
 
-            std::string username = extractUsername(req.target().to_string());
+            auto connHdr = req[http::field::connection].to_string();
+            auto upgHdr  = req[http::field::upgrade].to_string();
+            if (upgHdr.empty() || connHdr.find("Upgrade") == std::string::npos) {
+                http::response<http::string_body> res{http::status::ok, req.version()};
+                if (connectedUsers.count(username) && connectedUsers[username].status != UserStatus::DISCONNECTED) {
+                    res.result(http::status::bad_request);
+                    res.body() = "Usuario ya conectado";
+                }
+                res.prepare_payload();
+                http::write(*socket, res);
+                continue;
+            }
+
 
             // Validar el nombre de usuario
-            if (!isValidUsername(username))
+            if (!isValidUsername(username) ||
+            (connectedUsers.count(username) && connectedUsers[username].status != UserStatus::DISCONNECTED)) 
             {
                 http::response<http::string_body> res{http::status::bad_request, req.version()};
-                res.set(http::field::content_type, "text/plain");
-                res.body() = "Nombre de usuario inválido";
+                res.body() = "Usuario ya conectado";
                 res.prepare_payload();
                 http::write(*socket, res);
                 continue;

@@ -3,6 +3,7 @@
 #include <QMessageBox>
 #include <QUrl>
 #include <QDebug>
+#include <QTextBrowser>
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -16,6 +17,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&socket, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::errorOccurred),
             this, &MainWindow::onErrorOccurred);
 
+    connect(&socket, &QWebSocket::textMessageReceived,
+            this, &MainWindow::onTextMessageReceived);
 }
 
 MainWindow::~MainWindow()
@@ -44,6 +47,7 @@ void MainWindow::on_connectButton_clicked()
             QMessageBox::warning(this, "Error 400", "El nombre ya está en uso.");
         } else if(code >= 200 && code < 300) {
             ui->statusbar->showMessage("Conectando WebSocket...");
+            currentUser = username;
             socket.open(QUrl(QString("ws://3.134.168.244:5000?name=%1").arg(username)));
         } else {
             ui->statusbar->showMessage("Error HTTP " + QString::number(code));
@@ -77,5 +81,30 @@ void MainWindow::onDisconnected()
 {
     ui->statusbar->showMessage("Desconectado");
     QMessageBox::information(this, "Desconexión", "Se ha desconectado del servidor.");
+}
+
+void MainWindow::on_enviarMsgGeneral_clicked()
+{
+    QString text = ui->msgGeneralTextEdit->toPlainText().trimmed();
+    if (text.isEmpty()) return;
+
+    socket.sendTextMessage(text);
+
+    ui->chatGeneralTextEdit->append(
+        "<p align='right'><b>You:</b> " + text.toHtmlEscaped() + "</p>"
+        );
+
+
+    ui->msgGeneralTextEdit->clear();
+}
+
+
+void MainWindow::onTextMessageReceived(const QString &message)
+{
+    if (message.startsWith(currentUser + ":")) return;
+    ui->chatGeneralTextEdit->append(
+        "<p align='left'>" + message.toHtmlEscaped() + "</p>"
+        );
+
 }
 

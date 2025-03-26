@@ -25,10 +25,13 @@ private slots:
     void onConnected();
     void onErrorOccurred(QAbstractSocket::SocketError);
     void onDisconnected();
+    void on_enviarMsgGeneral_clicked();
+    void onTextMessageReceived(const QString &message);
 
 private:
     Ui::MainWindow *ui;
     QWebSocket socket;
     QNetworkAccessManager http;
+    QString currentUser;
 };
 #endif // MAINWINDOW_H

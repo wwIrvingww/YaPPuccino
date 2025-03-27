@@ -689,7 +689,7 @@ int main()
                     for (auto &[u, info] : connectedUsers)
                     {
                         // Solo los que están en ACTIVE o BUSY se vuelven INACTIVE tras X seg
-                        if (info.status == UserStatus::ACTIVE || info.status == UserStatus::BUSY)
+                        if (info.status == UserStatus::ACTIVE)
                         {
                             auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
                                 now - info.lastActivityTime

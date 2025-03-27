@@ -18,7 +18,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->changeStateComboBox->addItem("Activo", 1);
     ui->changeStateComboBox->addItem("Ocupado", 2);
-    ui->changeStateComboBox->addItem("Inactivo", 3);
 
     connect(&socket, &QWebSocket::binaryMessageReceived, this, &MainWindow::onBinaryMessageReceived);
     connect(&socket, &QWebSocket::connected, this, &MainWindow::onConnected);
@@ -86,7 +85,7 @@ void MainWindow::onrefreshUserListClick()
 
 void MainWindow::onSearchNameClicked()
 {
-    QString target = ui->buscarNombre->toPlainText().trimmed();
+    QString target = ui->buscarNombreInput->toPlainText().trimmed();
 
     if (target.isEmpty()) {
         QMessageBox::warning(this, "Error", "Debes ingresar un nombre de usuario.");
@@ -96,7 +95,7 @@ void MainWindow::onSearchNameClicked()
     QByteArray raw = target.toUtf8();
 
     QByteArray request;
-    request.append(char(52));                // Opcode = 52
+    request.append(char(2));
     request.append(char(raw.length()));      // Len username
     request.append(raw);                     // Username en UTF-8
 
@@ -216,6 +215,133 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             rows << QString("%1 → %2").arg(it.key(), it.value());
         }
         userModel->setStringList(rows);
+        return;
+    }
+
+    if (code == 50) {
+        if (pos >= data.size()) {
+            ui->statusbar->showMessage("Error: código de error no recibido.");
+            return;
+        }
+
+        uint8_t errorCode = bytes[pos++];
+
+        QString errorMsg;
+        switch (errorCode) {
+        case 1:
+            errorMsg = "¡Ups! El usuario no existe.";
+            break;
+        case 2:
+            errorMsg = "¡El estatus enviado es inválido!";
+            break;
+        case 3:
+            errorMsg = "¡El mensaje está vacío!";
+            break;
+        case 4:
+            errorMsg = "¡El mensaje fue enviado a un usuario con estatus desconectado!";
+            break;
+        default:
+            errorMsg = "Error desconocido del servidor.";
+            break;
+        }
+
+        // Mostrar retroalimentación
+        ui->statusbar->showMessage(errorMsg);
+        return;
+    }
+
+    if (code == 52) {
+        // Validar que al menos hay un byte para len
+        if (pos >= data.size()) {
+            ui->mostrarNombre->setText("Error: mensaje incompleto.");
+            return;
+        }
+
+        uint8_t nameLen = bytes[pos++];
+        if (pos + nameLen > data.size()) {
+            ui->mostrarNombre->setText("Error: nombre inválido.");
+            return;
+        }
+
+        QString username = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), nameLen);
+        pos += nameLen;
+
+        if (pos >= data.size()) {
+            ui->mostrarNombre->setText("¡Ups! Usuario no existe.");
+            return;
+        }
+
+        uint8_t status = bytes[pos++];
+
+        QString estado;
+        switch (status) {
+        case 0: estado = "DESACTIVADO"; break;
+        case 1: estado = "ACTIVO"; break;
+        case 2: estado = "OCUPADO"; break;
+        case 3: estado = "INACTIVO"; break;
+        default: estado = "DESCONOCIDO";
+        }
+
+        ui->mostrarNombre->setText(QString("%1 → %2").arg(username, estado));
+        return;
+    }
+
+    if (code == 54) {
+        if (pos + 2 > data.size()) return;
+
+        uint8_t nameLen = bytes[pos++];
+        QString username = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), nameLen);
+        pos += nameLen;
+
+        uint8_t stateCode = bytes[pos++];
+
+        QString estado;
+        switch (stateCode) {
+        case 1: estado = "ACTIVO"; break;
+        case 2: estado = "OCUPADO"; break;
+        case 3: estado = "INACTIVO"; break;
+        default: estado = "DESCONOCIDO"; break;
+        }
+
+        userStates[username] = estado;
+
+        // Si el cambio es del usuario actual
+        if (username == currentUser) {
+            ui->changeStateComboBox->blockSignals(true);
+
+            if (stateCode == 3) {
+                ui->statusbar->showMessage("Fuiste puesto en estado INACTIVO por inactividad.");
+
+                // Limpiar opciones del combo
+                ui->changeStateComboBox->clear();
+
+                // Mostrar "Inactivo" como opción seleccionada
+                ui->changeStateComboBox->addItem("Inactivo", 3);
+                ui->changeStateComboBox->addItem("Ocupado", 2);  // Única opción disponible
+                ui->changeStateComboBox->setCurrentIndex(0);     // Seleccionar "Inactivo"
+            } else {
+                // Restaurar opciones normales
+                ui->changeStateComboBox->clear();
+                ui->changeStateComboBox->addItem("Activo", 1);
+                ui->changeStateComboBox->addItem("Ocupado", 2);
+
+                int index = ui->changeStateComboBox->findData(stateCode);
+                if (index != -1) {
+                    ui->changeStateComboBox->setCurrentIndex(index);
+                }
+            }
+
+            ui->changeStateComboBox->setEnabled(true);
+            ui->changeStateComboBox->blockSignals(false);
+        }
+
+        // Refrescar UI si quieres
+        QStringList rows;
+        for (auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
+            rows << QString("%1 → %2").arg(it.key(), it.value());
+        }
+        userModel->setStringList(rows);
+        return;
     }
 }
 
@@ -226,9 +352,13 @@ void MainWindow::onManualStatusChange(int index)
     // Prepara mensaje binario
     QByteArray message;
     message.append(char(3)); // code = CHANGE_STATUS
-    message.append(char(currentUser.length()));
-    message.append(currentUser.toUtf8());
+    QByteArray rawName = currentUser.toUtf8();
+    message.append(char(rawName.length()));
+    message.append(rawName);
+
     message.append(char(statusCode));
+
+    qDebug() << "[DEBUG] Enviando cambio de estado:" << message.toHex(' ').toUpper();
 
     socket.sendBinaryMessage(message);
 

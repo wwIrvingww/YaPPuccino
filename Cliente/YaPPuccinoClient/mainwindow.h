@@ -29,6 +29,8 @@ private slots:
     void onTextMessageReceived(const QString &message);
     void onBinaryMessageReceived(const QByteArray &data);
     void onManualStatusChange(int index);
+    void onrefreshUserListClick();
+    void onSearchNameClicked();
 
 private:
     Ui::MainWindow *ui;

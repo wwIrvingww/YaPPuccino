@@ -31,6 +31,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->changeStateComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onManualStatusChange);
+
+    connect(ui->refreshUserList, &QPushButton::clicked, this, &MainWindow::onrefreshUserListClick);
+
+    connect(ui->buscarNombreBtn, &QPushButton::clicked, this, &MainWindow::onSearchNameClicked);
+
 }
 
 MainWindow::~MainWindow()
@@ -66,6 +71,39 @@ void MainWindow::on_connectButton_clicked()
         }
     });
 }
+
+void MainWindow::onrefreshUserListClick()
+{
+    if (socket.isValid() && socket.state() == QAbstractSocket::ConnectedState) {
+        QByteArray message;
+        message.append(char(1));
+        socket.sendBinaryMessage(message);
+        ui->statusbar->showMessage(" Solicitando lista de usuarios...");
+    } else {
+        QMessageBox::warning(this, "Error", "No estás conectado al servidor.");
+    }
+}
+
+void MainWindow::onSearchNameClicked()
+{
+    QString target = ui->buscarNombre->toPlainText().trimmed();
+
+    if (target.isEmpty()) {
+        QMessageBox::warning(this, "Error", "Debes ingresar un nombre de usuario.");
+        return;
+    }
+
+    QByteArray raw = target.toUtf8();
+
+    QByteArray request;
+    request.append(char(52));                // Opcode = 52
+    request.append(char(raw.length()));      // Len username
+    request.append(raw);                     // Username en UTF-8
+
+    socket.sendBinaryMessage(request);
+    ui->statusbar->showMessage("Solicitando historial de: " + target);
+}
+
 
 void MainWindow::onConnected()
 {
@@ -130,12 +168,31 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
     uint8_t code = bytes[pos++];
 
     if (code == 51) {
+        if (pos >= data.size()) return;
+
         uint8_t numUsers = bytes[pos++];
+        userStates.clear();
 
         for (int i = 0; i < numUsers; ++i) {
+            // Se requieren al menos 2 bytes: len + estado
+            if (pos + 2 > data.size()) {
+                qDebug() << "[WARN] No hay suficientes datos para el usuario #" << i;
+                break;
+            }
+
             uint8_t nameLen = bytes[pos++];
-            QString username = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), nameLen);
-            username = QUrl::fromPercentEncoding(username.toUtf8());
+
+            // Asegurarse de que hay suficientes bytes para el nombre y el estado
+            if (pos + nameLen >= data.size()) {
+                qDebug() << "[WARN] Longitud de nombre inválida para el usuario #" << i;
+                break;
+            }
+
+            QByteArray rawName(reinterpret_cast<const char*>(bytes + pos), nameLen);
+            QString username = QString::fromUtf8(rawName);
+            if (username.contains('%')) {
+                username = QUrl::fromPercentEncoding(rawName);
+            }
             pos += nameLen;
 
             uint8_t status = bytes[pos++];
@@ -149,58 +206,17 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             default: estado = "DESCONOCIDO";
             }
 
+            qDebug() << "Usuario:" << username << "Estado:" << estado;
             userStates[username] = estado;
         }
 
-        // Actualizar vista
+        // Actualizar la vista
         QStringList rows;
         for (auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
-            rows << QString("→ %1 (%2)").arg(it.key(), it.value());
+            rows << QString("%1 → %2").arg(it.key(), it.value());
         }
         userModel->setStringList(rows);
     }
-
-    // Sólo manejamos códigos 53 (USER_REGISTERED) y 54 (USER_STATUS_CHANGED)
-    if (code != 53 && code != 54)
-        return;
-
-    // Leer nombre
-    uint8_t nameLen = bytes[pos++];
-    QString username = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), nameLen);
-    pos += nameLen;
-
-    // Determinar nuevo estado
-    QString newState;
-
-    if (code == 53) {
-        newState = "ACTIVO";  // Estado por defecto para nuevos usuarios
-        userStates[username] = newState;
-    }
-    else if (code == 54) {
-        uint8_t stateCode = bytes[pos++];
-
-        switch(stateCode) {
-        case 1: newState = "ACTIVO"; break;
-        case 2: newState = "OCUPADO"; break;
-        case 3: newState = "INACTIVO"; break;
-        default: newState = "DESCONOCIDO";
-        }
-
-        userStates[username] = newState;
-
-        // Solo si el cambio de estado es del propio usuario
-        if (username == currentUser && stateCode == 3) {
-            ui->changeStateComboBox->setCurrentText("Inactivo");
-        }
-    }
-
-    // Actualizar modelo
-    userStates[username] = newState;
-    QStringList rows;
-    for(auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
-        rows << QString("%1 — %2").arg(it.key(), it.value());
-    }
-    userModel->setStringList(rows);
 }
 
 void MainWindow::onManualStatusChange(int index)

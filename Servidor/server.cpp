@@ -482,25 +482,57 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                     // List User: retorna el listado de usuarios y sus estados
                     case MessageCode::LIST_USERS:
                     {
-                        {
-                            std::lock_guard<std::mutex> lock(clients_mutex);
-                            for(auto &p : connectedUsers)
-                                snapshot.push_back(p.second);
+                        std::lock_guard<std::mutex> lock(clients_mutex);
+
+                        std::vector<unsigned char> resp;
+                        resp.push_back(MessageCode::RESPONSE_LIST_USERS); // Código 0x33
+
+                        size_t count = 0;
+                        for (const auto &[_, info] : connectedUsers) {
+                            if (info.status != UserStatus::DISCONNECTED)
+                                ++count;
                         }
-                        std::vector<std::vector<unsigned char>> fields;
-                        fields.push_back({static_cast<unsigned char>(connectedUsers.size())});
+                        resp.push_back(static_cast<unsigned char>(count));
 
-                        for (const auto &[key, info] : connectedUsers)
-                        {
-                            fields.push_back(
-                                std::vector<unsigned char>(info.username.begin(), info.username.end()));
-                            fields.push_back({static_cast<unsigned char>(info.status)});
+                        for (const auto &[_, info] : connectedUsers) {
+                            if (info.status == UserStatus::DISCONNECTED)
+                                continue;
+
+                            resp.push_back(static_cast<unsigned char>(info.username.size()));
+                            resp.insert(resp.end(), info.username.begin(), info.username.end());
+
+                            resp.push_back(static_cast<unsigned char>(info.status)); // casteo a byte
                         }
 
-                        auto responseMsg = buildBinaryMessage(MessageCode::RESPONSE_LIST_USERS, fields, true);
-                        sendBinaryMessage(ws, responseMsg);
+                        sendBinaryMessage(ws, resp);
+                        std::cout << "→ Enviado listado de " << count << " usuarios a " << username << "\n";
+                        break;
+                    }
 
-                        std::cout << "→ Enviado listado de " << connectedUsers.size() << " usuarios a " << username << "\n";
+
+
+                    case MessageCode::GET_USER:
+                    {
+                        std::string target(pm.fields[0].begin(), pm.fields[0].end());
+                        std::lock_guard<std::mutex> lock(clients_mutex);
+                        auto it = connectedUsers.find(target);
+
+                        if (it == connectedUsers.end() || it->second.status == UserStatus::DISCONNECTED) {
+                            std::vector<unsigned char> errResp;
+                            errResp.push_back(MessageCode::ERROR_RESPONSE);       
+                            errResp.push_back(ErrorCode::USER_NOT_FOUND);         
+                            sendBinaryMessage(ws, errResp);
+                        } else {
+                            std::vector<unsigned char> resp;
+                            resp.push_back(MessageCode::RESPONSE_GET_USER);          // TIPO
+                            resp.push_back(1);                                       // NUM_USUARIOS
+                            resp.push_back(static_cast<unsigned char>(target.size())); // LEN_USER
+                            resp.insert(resp.end(), target.begin(), target.end());   // USERNAME
+                            resp.push_back(static_cast<unsigned char>(it->second.status)); // STATUS 
+
+                            sendBinaryMessage(ws, resp);
+                            std::cout << "→ GET_USER: enviado info de " << target << std::endl;
+                        }
                         break;
                     }
 
@@ -612,7 +644,7 @@ int main()
     try
     {
         asio::io_context io_context;
-        tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), 5001));
+        tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), 5000));
 
         std::cout << "Servidor WebSockets en ws://localhost:5000" << std::endl;
 

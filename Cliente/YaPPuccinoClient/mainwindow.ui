@@ -17,7 +17,7 @@
    <widget class="QLabel" name="label_Title">
     <property name="geometry">
      <rect>
-      <x>40</x>
+      <x>30</x>
       <y>20</y>
       <width>441</width>
       <height>51</height>
@@ -26,6 +26,7 @@
     <property name="font">
      <font>
       <pointsize>26</pointsize>
+      <bold>true</bold>
      </font>
     </property>
     <property name="text">
@@ -41,18 +42,23 @@
       <x>240</x>
       <y>80</y>
       <width>211</width>
-      <height>24</height>
+      <height>31</height>
      </rect>
     </property>
    </widget>
    <widget class="QLabel" name="label_text_user">
     <property name="geometry">
      <rect>
-      <x>40</x>
+      <x>50</x>
       <y>80</y>
-      <width>171</width>
-      <height>16</height>
+      <width>211</width>
+      <height>31</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+     </font>
     </property>
     <property name="text">
      <string>Ingresa tu nombre de usuario:</string>
@@ -61,10 +67,10 @@
    <widget class="QPushButton" name="connectButton">
     <property name="geometry">
      <rect>
-      <x>450</x>
+      <x>460</x>
       <y>80</y>
       <width>171</width>
-      <height>24</height>
+      <height>31</height>
      </rect>
     </property>
     <property name="text">
@@ -74,8 +80,8 @@
    <widget class="QTextEdit" name="msgGeneralTextEdit">
     <property name="geometry">
      <rect>
-      <x>240</x>
-      <y>540</y>
+      <x>230</x>
+      <y>510</y>
       <width>481</width>
       <height>41</height>
      </rect>
@@ -84,8 +90,8 @@
    <widget class="QPushButton" name="enviarMsgGeneral">
     <property name="geometry">
      <rect>
-      <x>730</x>
-      <y>540</y>
+      <x>720</x>
+      <y>510</y>
       <width>80</width>
       <height>41</height>
      </rect>
@@ -97,9 +103,9 @@
    <widget class="QComboBox" name="changeStateComboBox">
     <property name="geometry">
      <rect>
-      <x>1110</x>
-      <y>50</y>
-      <width>171</width>
+      <x>1050</x>
+      <y>70</y>
+      <width>181</width>
       <height>31</height>
      </rect>
     </property>
@@ -107,19 +113,20 @@
    <widget class="QLabel" name="label_4">
     <property name="geometry">
      <rect>
-      <x>1070</x>
-      <y>0</y>
-      <width>231</width>
-      <height>51</height>
+      <x>870</x>
+      <y>70</y>
+      <width>171</width>
+      <height>31</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>18</pointsize>
+      <pointsize>14</pointsize>
+      <bold>true</bold>
      </font>
     </property>
     <property name="text">
-     <string>Cambia tu estado</string>
+     <string>Cambia tu estado:</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignmentFlag::AlignCenter</set>
@@ -128,10 +135,10 @@
    <widget class="QListView" name="listView">
     <property name="geometry">
      <rect>
-      <x>30</x>
-      <y>150</y>
-      <width>141</width>
-      <height>501</height>
+      <x>40</x>
+      <y>180</y>
+      <width>171</width>
+      <height>541</height>
      </rect>
     </property>
    </widget>
@@ -139,14 +146,14 @@
     <property name="geometry">
      <rect>
       <x>40</x>
-      <y>100</y>
-      <width>121</width>
-      <height>41</height>
+      <y>140</y>
+      <width>111</width>
+      <height>31</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>20</pointsize>
+      <pointsize>16</pointsize>
      </font>
     </property>
     <property name="text">
@@ -159,30 +166,30 @@
    <widget class="QPlainTextEdit" name="sentChats">
     <property name="geometry">
      <rect>
-      <x>890</x>
-      <y>480</y>
+      <x>830</x>
+      <y>440</y>
       <width>401</width>
-      <height>181</height>
+      <height>231</height>
      </rect>
     </property>
    </widget>
    <widget class="QTextEdit" name="privMsgTextEdit">
     <property name="geometry">
      <rect>
-      <x>890</x>
-      <y>670</y>
+      <x>830</x>
+      <y>680</y>
       <width>311</width>
-      <height>31</height>
+      <height>41</height>
      </rect>
     </property>
    </widget>
    <widget class="QPushButton" name="enviarMsgPriv">
     <property name="geometry">
      <rect>
-      <x>1210</x>
-      <y>670</y>
+      <x>1150</x>
+      <y>680</y>
       <width>81</width>
-      <height>31</height>
+      <height>41</height>
      </rect>
     </property>
     <property name="text">
@@ -192,15 +199,15 @@
    <widget class="QLabel" name="label_Title_priv_mssg">
     <property name="geometry">
      <rect>
-      <x>890</x>
-      <y>430</y>
-      <width>421</width>
+      <x>870</x>
+      <y>390</y>
+      <width>301</width>
       <height>51</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>20</pointsize>
+      <pointsize>16</pointsize>
      </font>
     </property>
     <property name="text">
@@ -213,25 +220,25 @@
    <widget class="QPlainTextEdit" name="receivedChats">
     <property name="geometry">
      <rect>
-      <x>890</x>
-      <y>150</y>
+      <x>830</x>
+      <y>180</y>
       <width>401</width>
-      <height>271</height>
+      <height>211</height>
      </rect>
     </property>
    </widget>
    <widget class="QLabel" name="label_7">
     <property name="geometry">
      <rect>
-      <x>890</x>
-      <y>90</y>
-      <width>421</width>
+      <x>870</x>
+      <y>130</y>
+      <width>311</width>
       <height>51</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>20</pointsize>
+      <pointsize>16</pointsize>
      </font>
     </property>
     <property name="text">
@@ -244,32 +251,125 @@
    <widget class="QTextBrowser" name="chatGeneralTextEdit">
     <property name="geometry">
      <rect>
-      <x>240</x>
-      <y>150</y>
+      <x>230</x>
+      <y>180</y>
       <width>571</width>
-      <height>381</height>
+      <height>321</height>
      </rect>
     </property>
    </widget>
    <widget class="QLabel" name="label_8">
     <property name="geometry">
      <rect>
-      <x>240</x>
-      <y>100</y>
+      <x>230</x>
+      <y>130</y>
       <width>161</width>
       <height>51</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>20</pointsize>
+      <pointsize>16</pointsize>
      </font>
     </property>
     <property name="text">
-     <string>General ~</string>
+     <string>Chat General (~)</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignmentFlag::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="refreshUserList">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>140</y>
+      <width>41</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>⟳</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_9">
+    <property name="geometry">
+     <rect>
+      <x>540</x>
+      <y>570</y>
+      <width>261</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Obtener usuario por nombre</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="buscarNombreBtn">
+    <property name="geometry">
+     <rect>
+      <x>720</x>
+      <y>630</y>
+      <width>80</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Buscar</string>
+    </property>
+   </widget>
+   <widget class="QTextEdit" name="buscarNombre">
+    <property name="geometry">
+     <rect>
+      <x>490</x>
+      <y>630</y>
+      <width>221</width>
+      <height>31</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_10">
+    <property name="geometry">
+     <rect>
+      <x>280</x>
+      <y>620</y>
+      <width>211</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Ingresa el nombre del usuario:</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QTextBrowser" name="mostrarNombre">
+    <property name="geometry">
+     <rect>
+      <x>290</x>
+      <y>670</y>
+      <width>511</width>
+      <height>41</height>
+     </rect>
     </property>
    </widget>
   </widget>
@@ -282,6 +382,12 @@
      <height>21</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menuasdasd">
+    <property name="title">
+     <string>YaPPucino</string>
+    </property>
+   </widget>
+   <addaction name="menuasdasd"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>

@@ -16,6 +16,10 @@ MainWindow::MainWindow(QWidget *parent)
     userModel = new QStringListModel(this);
     ui->listView->setModel(userModel);
 
+    ui->changeStateComboBox->addItem("Activo", 1);
+    ui->changeStateComboBox->addItem("Ocupado", 2);
+    ui->changeStateComboBox->addItem("Inactivo", 3);
+
     connect(&socket, &QWebSocket::binaryMessageReceived, this, &MainWindow::onBinaryMessageReceived);
     connect(&socket, &QWebSocket::connected, this, &MainWindow::onConnected);
     connect(&socket, &QWebSocket::disconnected, this, &MainWindow::onDisconnected);
@@ -24,13 +28,15 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(&socket, &QWebSocket::textMessageReceived,
             this, &MainWindow::onTextMessageReceived);
+
+    connect(ui->changeStateComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onManualStatusChange);
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
 }
-
 
 
 void MainWindow::on_connectButton_clicked()
@@ -66,7 +72,7 @@ void MainWindow::onConnected()
     ui->statusbar->showMessage("Conectado ✅");
     QMessageBox::information(this, "Conexión", "Conectado correctamente al servidor.");
     QByteArray request;
-    request.append(char(52));
+    request.append(char(1));
     socket.sendBinaryMessage(request);
 }
 
@@ -118,9 +124,41 @@ void MainWindow::onTextMessageReceived(const QString &message)
 
 void MainWindow::onBinaryMessageReceived(const QByteArray &data)
 {
+    qDebug() << "[BINARIO] Mensaje recibido:" << data.toHex(' ').toUpper();
     const auto bytes = reinterpret_cast<const unsigned char*>(data.constData());
     int pos = 0;
     uint8_t code = bytes[pos++];
+
+    if (code == 51) {
+        uint8_t numUsers = bytes[pos++];
+
+        for (int i = 0; i < numUsers; ++i) {
+            uint8_t nameLen = bytes[pos++];
+            QString username = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), nameLen);
+            username = QUrl::fromPercentEncoding(username.toUtf8());
+            pos += nameLen;
+
+            uint8_t status = bytes[pos++];
+
+            QString estado;
+            switch (status) {
+            case 0: estado = "DESACTIVADO"; break;
+            case 1: estado = "ACTIVO";      break;
+            case 2: estado = "OCUPADO";     break;
+            case 3: estado = "INACTIVO";    break;
+            default: estado = "DESCONOCIDO";
+            }
+
+            userStates[username] = estado;
+        }
+
+        // Actualizar vista
+        QStringList rows;
+        for (auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
+            rows << QString("→ %1 (%2)").arg(it.key(), it.value());
+        }
+        userModel->setStringList(rows);
+    }
 
     // Sólo manejamos códigos 53 (USER_REGISTERED) y 54 (USER_STATUS_CHANGED)
     if (code != 53 && code != 54)
@@ -133,15 +171,26 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
 
     // Determinar nuevo estado
     QString newState;
+
     if (code == 53) {
-        newState = "ACTIVO";
-    } else {
+        newState = "ACTIVO";  // Estado por defecto para nuevos usuarios
+        userStates[username] = newState;
+    }
+    else if (code == 54) {
         uint8_t stateCode = bytes[pos++];
+
         switch(stateCode) {
         case 1: newState = "ACTIVO"; break;
         case 2: newState = "OCUPADO"; break;
         case 3: newState = "INACTIVO"; break;
         default: newState = "DESCONOCIDO";
+        }
+
+        userStates[username] = newState;
+
+        // Solo si el cambio de estado es del propio usuario
+        if (username == currentUser && stateCode == 3) {
+            ui->changeStateComboBox->setCurrentText("Inactivo");
         }
     }
 
@@ -153,5 +202,21 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
     }
     userModel->setStringList(rows);
 }
+
+void MainWindow::onManualStatusChange(int index)
+{
+    int statusCode = ui->changeStateComboBox->itemData(index).toInt();
+
+    // Prepara mensaje binario
+    QByteArray message;
+    message.append(char(3)); // code = CHANGE_STATUS
+    message.append(char(currentUser.length()));
+    message.append(currentUser.toUtf8());
+    message.append(char(statusCode));
+
+    socket.sendBinaryMessage(message);
+
+}
+
 
 

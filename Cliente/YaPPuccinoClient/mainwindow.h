@@ -28,7 +28,7 @@ private slots:
     void on_enviarMsgGeneral_clicked();
     void onTextMessageReceived(const QString &message);
     void onBinaryMessageReceived(const QByteArray &data);
-
+    void onManualStatusChange(int index);
 
 private:
     Ui::MainWindow *ui;

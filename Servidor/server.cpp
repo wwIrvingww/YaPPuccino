@@ -184,27 +184,26 @@ void broadcastUserStatusChanged(const std::string &username, UserStatus newStatu
 
     // Solo se notifica a usuarios en ACTIVE o BUSY
     for (auto &[user, info] : connectedUsers)
-     {
-         if ((info.status == UserStatus::ACTIVE || info.status == UserStatus::BUSY)
-             && info.ws                                    // <-- chequeo añadido
-            && info.ws->next_layer().is_open())
-         {
-             try {
-                 sendBinaryMessage(info.ws, binMsg);
-             } catch(const std::exception &e) {
-                 std::cerr << "[ERROR] broadcastUserStatusChanged to " << user << ": " << e.what() << std::endl;
-             }
-         }
-     }
+    {
+        if (info.ws && info.ws->next_layer().is_open())
+        {
+            try {
+                sendBinaryMessage(info.ws, binMsg);
+            } catch(const std::exception &e) {
+                std::cerr << "[ERROR] broadcastUserStatusChanged to " << user << ": " << e.what() << std::endl;
+            }
+        }
+    }
 }
 
 // Cambiar el estado de un usuario y notificar a los demás
-void setUserStatus(const std::string &username, UserStatus newStatus)
+void setUserStatus(const std::string &username, UserStatus newStatus, bool forceNotify = false)
 {
     if (!connectedUsers.count(username)) return;
 
     auto &info = connectedUsers[username];
-    if (info.status == newStatus)
+    
+    if (info.status == newStatus && !forceNotify)
     {
         // Si no hay cambio, no hacemos nada
         return;
@@ -224,7 +223,7 @@ void setUserStatus(const std::string &username, UserStatus newStatus)
 
     // 2) Notificar por texto: "Usuario X se ha cambiado a estado Y"
     //DEBUG LOG: std::cerr << "[DEBUG] setUserStatus START: " << username << " from " << userStatusToString(info.status) << " to " << userStatusToString(newStatus) << std::endl;
-    info.status = newStatus;
+    // info.status = newStatus;
     //DEBUG LOG: std::cerr << "[DEBUG] setUserStatus END: " << username << " now " << userStatusToString(info.status) << std::endl; 
 
     broadcastTextMessage("Usuario " + username + " se ha cambiado a estado " + userStatusToString(newStatus));
@@ -232,7 +231,7 @@ void setUserStatus(const std::string &username, UserStatus newStatus)
 
 void markUserDisconnected(const std::string &username)
 {
-    setUserStatus(username, UserStatus::DISCONNECTED);
+    setUserStatus(username, UserStatus::DISCONNECTED, true);
 }
 
 // Manejo de la conexión de un cliente mediante WebSockets
@@ -259,20 +258,20 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                     // (Si era INACTIVE, se vuelve ACTIVE según tu regla)
                     if (info.previousState == UserStatus::BUSY)
                     {
-                        setUserStatus(username, UserStatus::BUSY);
+                        setUserStatus(username, UserStatus::BUSY, true);
                     }
-                    else if (info.previousState == UserStatus::ACTIVE)
+                    else if (info.previousState == UserStatus::ACTIVE, true)
                     {
-                        setUserStatus(username, UserStatus::ACTIVE);
+                        setUserStatus(username, UserStatus::ACTIVE, true);
                     }
-                    else if (info.previousState == UserStatus::INACTIVE)
+                    else if (info.previousState == UserStatus::INACTIVE, true)
                     {
-                        setUserStatus(username, UserStatus::ACTIVE);
+                        setUserStatus(username, UserStatus::ACTIVE, true);
                     }
                     else
                     {
                         // Por defecto, si no teníamos nada, lo ponemos en ACTIVE
-                        setUserStatus(username, UserStatus::ACTIVE);
+                        setUserStatus(username, UserStatus::ACTIVE, true);
                     }
                 }
                 // Si no estaba DISCONNECTED, no forzamos nada. (Si estaba BUSY, se queda BUSY,
@@ -296,7 +295,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                 connectedUsers[username] = newUser;
 
                 // Notificamos su estado inicial (ACTIVO)
-                setUserStatus(username, UserStatus::ACTIVE);
+                setUserStatus(username, UserStatus::ACTIVE, true);
                 
             }
         }
@@ -334,10 +333,6 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                     auto &info = connectedUsers[username];
                     info.lastActivityTime = std::chrono::steady_clock::now();
 
-                    // Imprimir estado actual para depuración
-                    std::cout << "Estado actual de " << username << ": " 
-                            << userStatusToString(info.status) << std::endl;
-
                     if (info.status == UserStatus::INACTIVE)
                     {
                         needReactivation = true;
@@ -348,7 +343,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                 {
                     std::cout << "Reactivando usuario " << username << std::endl;
                     // Reactivamos al usuario; setUserStatus internamente adquiere el mutex
-                    setUserStatus(username, UserStatus::ACTIVE);
+                    setUserStatus(username, UserStatus::ACTIVE, true);
 
                     // Ahora, fuera del mutex, enviar un mensaje directo al cliente para confirmar la reactivación
                     ws->binary(false);
@@ -358,7 +353,8 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                         //DEBUG LOG: std::cerr << "[DEBUG] Enviado texto a " << reactivationMsg << std::endl;
                     } catch (const std::exception &e) {
                         //DEBUG LOG: std::cerr << "[ERROR] send to " << reactivationMsg << ": " << e.what() << std::endl;
-                    }                }
+                    }                
+                }
             }
 
             // Diferenciar si el mensaje recibido es de texto o binario
@@ -368,6 +364,8 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                 // Evitar procesar mensajes vacíos o compuestos únicamente de espacios
                 if (msg.empty() || std::all_of(msg.begin(), msg.end(), ::isspace))
                 {
+                    auto errMsg = buildBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
+                    sendBinaryMessage(ws, errMsg);
                     continue;
                 }
                 if (msg == "/exit")
@@ -499,7 +497,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                             fields.push_back({static_cast<unsigned char>(info.status)});
                         }
 
-                        auto responseMsg = buildBinaryMessage(MessageCode::RESPONSE_LIST_USERS, fields);
+                        auto responseMsg = buildBinaryMessage(MessageCode::RESPONSE_LIST_USERS, fields, true);
                         sendBinaryMessage(ws, responseMsg);
 
                         std::cout << "→ Enviado listado de " << connectedUsers.size() << " usuarios a " << username << "\n";
@@ -554,7 +552,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                         std::string targetUser(pm.fields[0].begin(), pm.fields[0].end());
                         UserStatus newStatus = static_cast<UserStatus>(pm.fields[1][0]);
 
-                        setUserStatus(targetUser, newStatus);
+                        setUserStatus(targetUser, newStatus, true);
                         break;
                     }
 
@@ -584,7 +582,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
             }
             if (connectedUsers.count(username))
             {
-                setUserStatus(username, UserStatus::DISCONNECTED);
+                setUserStatus(username, UserStatus::DISCONNECTED, true);
                 connectedUsers[username].ws.reset();
             }
         }
@@ -601,7 +599,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
             }
             if (connectedUsers.count(username))
             {
-                setUserStatus(username, UserStatus::DISCONNECTED);
+                setUserStatus(username, UserStatus::DISCONNECTED, true);
                 connectedUsers[username].ws.reset();
             }
         }
@@ -614,7 +612,7 @@ int main()
     try
     {
         asio::io_context io_context;
-        tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), 5000));
+        tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), 5001));
 
         std::cout << "Servidor WebSockets en ws://localhost:5000" << std::endl;
 
@@ -654,7 +652,7 @@ int main()
                 // Fuera del lock, se actualiza el estado para cada usuario identificado.
                 for (const auto &username : usersToSetInactive)
                 {
-                    setUserStatus(username, UserStatus::INACTIVE);
+                    setUserStatus(username, UserStatus::INACTIVE, true);
                     std::cout << "Usuario " << username << " pasó a INACTIVE por inactividad.\n";
                 }
             }

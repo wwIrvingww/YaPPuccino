@@ -5,17 +5,22 @@
 
 // Función para construir un mensaje binario:
 // Se inserta primero el código (1 byte), luego para cada campo se agrega 1 byte con la longitud y finalmente los datos.
-std::vector<unsigned char> buildBinaryMessage(uint8_t code, const std::vector<std::vector<unsigned char>>& fields) {
+std::vector<unsigned char> buildBinaryMessage(uint8_t code, 
+    const std::vector<std::vector<unsigned char>>& fields, bool omitFirstLength) {
+    
     std::vector<unsigned char> message;
-
-    message.push_back(code); 
-
-    for (const auto& field : fields) {
-        if (field.size() > 255) {
-            throw std::runtime_error("El tamaño del campo excede 255 bytes.");
+    message.push_back(code);
+    
+    for (size_t i = 0; i < fields.size(); ++i) {
+        if (i == 0 && omitFirstLength) {
+            // Para el primer campo, omitir el byte de longitud
+            message.insert(message.end(), fields[i].begin(), fields[i].end());
+        } else {
+            if (fields[i].size() > 255)
+                throw std::runtime_error("El tamaño del campo excede 255 bytes.");
+            message.push_back(static_cast<unsigned char>(fields[i].size()));
+            message.insert(message.end(), fields[i].begin(), fields[i].end());
         }
-        message.push_back(static_cast<unsigned char>(field.size())); // Tamaño del campo
-        message.insert(message.end(), field.begin(), field.end()); // Datos del campo
     }
     return message;
 }

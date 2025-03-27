@@ -295,15 +295,21 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
 
         uint8_t stateCode = bytes[pos++];
 
-        QString estado;
-        switch (stateCode) {
-        case 1: estado = "ACTIVO"; break;
-        case 2: estado = "OCUPADO"; break;
-        case 3: estado = "INACTIVO"; break;
-        default: estado = "DESCONOCIDO"; break;
-        }
+        if (stateCode == 0) {
+            // Usuario desconectado: eliminarlo del mapa
+            userStates.remove(username);
+        } else {
+            QString estado;
+            switch (stateCode) {
+            case 1: estado = "ACTIVO"; break;
+            case 2: estado = "OCUPADO"; break;
+            case 3: estado = "INACTIVO"; break;
+            default: estado = "DESCONOCIDO"; break;
 
-        userStates[username] = estado;
+            }
+
+            userStates[username] = estado;
+        }
 
         // Si el cambio es del usuario actual
         if (username == currentUser) {

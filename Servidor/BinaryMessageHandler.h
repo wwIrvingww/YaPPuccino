@@ -15,6 +15,9 @@ struct ParsedMessage {
 // Construye un mensaje binario a partir de un código y una lista de campos
 std::vector<unsigned char> buildBinaryMessage(uint8_t code, const std::vector<std::vector<unsigned char>>& fields, bool omitFirstLength = false);
 
+// Construye un mensaje binario sin longitud de campo
+std::vector<unsigned char> buildRawBinaryMessage( uint8_t code, const std::vector<std::vector<unsigned char>>& fields);
+
 // Parsea un buffer de mensaje binario y devuelve la estructura ParsedMessage
 ParsedMessage parseBinaryMessage(const std::vector<unsigned char>& buffer);
 

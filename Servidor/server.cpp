@@ -173,15 +173,13 @@ void broadcastUserStatusChanged(const std::string &username, UserStatus newStatu
         for(auto &p : connectedUsers)
             snapshot.push_back(p.second);
     }
-    // Campos a enviar: [Username] [Status en 1 byte]
-    std::vector<unsigned char> userField(username.begin(), username.end());
-    std::vector<unsigned char> statusField(1, static_cast<unsigned char>(newStatus));
-
-    auto binMsg = buildBinaryMessage(
-        MessageCode::USER_STATUS_CHANGED, // 54
-        { userField, statusField }
-    );
-
+    
+    std::vector<unsigned char> binMsg;
+    binMsg.push_back(MessageCode::USER_STATUS_CHANGED); // 0x36
+    binMsg.push_back(static_cast<unsigned char>(username.size())); // Len username
+    binMsg.insert(binMsg.end(), username.begin(), username.end()); // Username
+    binMsg.push_back(static_cast<unsigned char>(newStatus)); // Status (sin longitud)
+    
     // Solo se notifica a usuarios en ACTIVE o BUSY
     for (auto &[user, info] : connectedUsers)
     {
@@ -333,9 +331,12 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                     auto &info = connectedUsers[username];
                     info.lastActivityTime = std::chrono::steady_clock::now();
 
-                    if (info.status == UserStatus::INACTIVE)
+                    if (info.status == UserStatus::INACTIVE && ws->got_text())
                     {
-                        needReactivation = true;
+                        std::string msg = beast::buffers_to_string(buffer.data());
+                        if (!msg.empty() && !std::all_of(msg.begin(), msg.end(), ::isspace)) {
+                            needReactivation = true;
+                        }
                     }
                 } // Aquí se libera el mutex
 
@@ -364,7 +365,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                 // Evitar procesar mensajes vacíos o compuestos únicamente de espacios
                 if (msg.empty() || std::all_of(msg.begin(), msg.end(), ::isspace))
                 {
-                    auto errMsg = buildBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
+                    auto errMsg = buildRawBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
                     sendBinaryMessage(ws, errMsg);
                     continue;
                 }
@@ -407,7 +408,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                         // Se esperan dos campos: destinatario y contenido del mensaje
                         if (pm.fields.size() < 2)
                         {
-                            auto errMsg = buildBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
+                            auto errMsg = buildRawBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
                             sendBinaryMessage(ws, errMsg);
                             break;
                         }
@@ -420,7 +421,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
 
                         if (message.empty())
                         {
-                            auto errMsg = buildBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
+                            auto errMsg = buildRawBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
                             sendBinaryMessage(ws, errMsg);
                             break;
                         }
@@ -525,7 +526,6 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                         } else {
                             std::vector<unsigned char> resp;
                             resp.push_back(MessageCode::RESPONSE_GET_USER);          // TIPO
-                            resp.push_back(1);                                       // NUM_USUARIOS
                             resp.push_back(static_cast<unsigned char>(target.size())); // LEN_USER
                             resp.insert(resp.end(), target.begin(), target.end());   // USERNAME
                             resp.push_back(static_cast<unsigned char>(it->second.status)); // STATUS 
@@ -577,12 +577,34 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
 
                     case MessageCode::CHANGE_STATUS:
                     {
+                        std::cerr << "[DEBUG] CHANGE_STATUS fields.size(): " << pm.fields.size()
+                        << " field[0].size(): " << pm.fields[0].size()
+                        << " field[1].size(): " << pm.fields[1].size() << std::endl;
 
-                        if (pm.fields.size() < 2 || pm.fields[0].empty() || pm.fields[1].empty())
+                        if (pm.fields.size() < 2 || pm.fields[0].empty() || pm.fields[1].empty()) {
+                            auto errMsg = buildRawBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
+                            sendBinaryMessage(ws, errMsg);
                             break;
+                        }
 
                         std::string targetUser(pm.fields[0].begin(), pm.fields[0].end());
-                        UserStatus newStatus = static_cast<UserStatus>(pm.fields[1][0]);
+                        uint8_t rawStatus = pm.fields[1][0];
+
+                        // Validar status: solo 1 (ACTIVO), 2 (OCUPADO) o 3 (INACTIVO)
+                        if (rawStatus < 1 || rawStatus > 3) {
+                            auto errMsg = buildRawBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::INVALID_STATUS}});
+                            sendBinaryMessage(ws, errMsg);
+                            std::cerr << "[ERROR] Usuario " << targetUser << " envió estado inválido: " << (int)rawStatus << std::endl;
+                            break;
+                        }
+
+                        UserStatus newStatus = static_cast<UserStatus>(rawStatus);
+
+                        if (!connectedUsers.count(targetUser)) {
+                            auto errMsg = buildRawBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::USER_NOT_FOUND}});
+                            sendBinaryMessage(ws, errMsg);
+                            break;
+                        }
 
                         setUserStatus(targetUser, newStatus, true);
                         break;
@@ -591,7 +613,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                     default:
                     {
                         std::cout << "Código de mensaje binario no reconocido: " << (int)pm.code << std::endl;
-                        auto errMsg = buildBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
+                        auto errMsg = buildRawBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
                         sendBinaryMessage(ws, errMsg);
                         break;
                     }
@@ -600,7 +622,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                 catch (const std::exception &e)
                 {
                     std::cerr << "Error al procesar mensaje binario de " << username << ": " << e.what() << std::endl;
-                    auto errMsg = buildBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
+                    auto errMsg = buildRawBinaryMessage(MessageCode::ERROR_RESPONSE, {{ErrorCode::EMPTY_MESSAGE}});
                     sendBinaryMessage(ws, errMsg);
                 }
             }

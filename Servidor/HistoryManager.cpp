@@ -4,7 +4,7 @@
 #include <string>
 #include <iostream>
 
-static const std::string HISTORY_FILE = "/home/ubuntu/YaPPuccino/Servidor/history.txt";
+static const std::string HISTORY_FILE = "/home/ubuntu/YaPPuccino/Servidor/general.txt";
 
 // Cada línea del archivo: "username|mensaje"
 void appendToHistory(const std::string &user, const std::string &msg)
@@ -82,5 +82,28 @@ std::vector<std::pair<std::string, std::string>> loadHistory()
     }
     fin.close();
     std::cerr << "[DEBUG] loadHistory: Cargado historial con " << result.size() << " entradas." << std::endl;
+    return result;
+}
+
+std::string privateHistoryPath(const std::string &u1, const std::string &u2) {
+    auto a = std::min(u1, u2), b = std::max(u1, u2);
+    return "/home/ubuntu/YaPPuccino/Servidor/History/private/" + a + "_" + b + ".txt";
+}
+
+void appendPrivateHistory(const std::string &from, const std::string &to, const std::string &msg) {
+    std::string path = privateHistoryPath(from, to);
+    std::ofstream fout(path, std::ios::app);
+    fout << from << "|" << msg << "\n";
+}
+
+std::vector<std::pair<std::string,std::string>> loadPrivateHistory(const std::string &u1, const std::string &u2) {
+    std::string path = privateHistoryPath(u1, u2);
+    std::ifstream fin(path);
+    std::vector<std::pair<std::string,std::string>> result;
+    std::string line;
+    while(std::getline(fin,line)) {
+        auto pos = line.find('|');
+        result.emplace_back(line.substr(0,pos), line.substr(pos+1));
+    }
     return result;
 }

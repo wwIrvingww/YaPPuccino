@@ -8,6 +8,7 @@
 #include <string>
 #include <iomanip>
 #include <memory>
+#include <fstream>
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
 #include <boost/beast/websocket.hpp>
@@ -453,6 +454,9 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                                 for(auto &p : connectedUsers)
                                     snapshot.push_back(p.second);
                             }
+
+                            appendPrivateHistory(username, dest, message);
+
                             // Solo envia mensajes a los activos y ocupadsos
                             if (connectedUsers.count(dest) && connectedUsers[dest].status == UserStatus::ACTIVE || connectedUsers[dest].status == UserStatus::BUSY)
                             {
@@ -475,6 +479,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                             broadcastTextMessage(mensajeTexto);
                         } else {
                             std::cout << "→ Mensaje de " << username << " enviado a " << dest << ": " << message << std::endl;
+
                         }
 
                         break;
@@ -538,23 +543,41 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
 
                     case MessageCode::GET_HISTORY:
                     {
-                        // 1) Cargar los pares <usuario, mensaje> del archivo
-                        auto history = loadHistory();
 
-                        // 2) Construir el vector de campos
-                        //    El primer campo: [Num Mensajes] en 1 byte
-                        //    Luego, para cada mensaje: 2 campos [Usuario], [Mensaje]
+                        std::string target(pm.fields[0].begin(), pm.fields[0].end());
+
+                        std::vector<std::pair<std::string, std::string>> history;
+
+                        if (target == "~"){
+                            history = loadHistory();
+                        } else {
+                            // Sólo permite historial si quien pide es parte de la conversación
+                            if (username != target && !connectedUsers.count(username)) {
+                                // Usuario no existe o no es parte → error
+                                std::vector<unsigned char> err = { MessageCode::ERROR_RESPONSE, ErrorCode::USER_NOT_FOUND };
+                                sendBinaryMessage(ws, err);
+                                break;
+                            }
+                            std::string path = privateHistoryPath(username, target);
+                            std::ifstream fin(path);
+                            if (!fin.good()) {
+                                std::vector<unsigned char> err = { MessageCode::ERROR_RESPONSE, ErrorCode::USER_NOT_FOUND };
+                                sendBinaryMessage(ws, err);
+                                break;
+                            }
+                            history = loadPrivateHistory(username, target);
+                        }
+
+
+
                         std::vector<std::vector<unsigned char>> fields;
 
-                        // Ojo: si tu buildBinaryMessage asume [NumFields], [LenCampo], etc.
-                        // revisa que no haya límite de 1 byte. Si hay +50, cabe en un byte? 
-                        // 50 < 256, así que está bien.
+
                         fields.push_back({ static_cast<unsigned char>(history.size()) });
 
                         for (auto &hm : history)
                         {
-                            // hm.first  = user
-                            // hm.second = mensaje
+
                             fields.push_back(
                                 std::vector<unsigned char>(hm.first.begin(), hm.first.end())
                             );
@@ -563,14 +586,13 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                             );
                         }
 
-                        // 3) Construir el mensaje binario con código 56
-                        auto responseMsg = buildBinaryMessage(MessageCode::RESPONSE_HISTORY, fields);
+                        auto responseMsg = buildBinaryMessage(MessageCode::RESPONSE_HISTORY, fields, true);
 
-                        // 4) Enviarlo al cliente que hizo la petición
                         sendBinaryMessage(ws, responseMsg);
 
                         std::cout << "→ Historial de " << history.size() 
-                                << " mensajes enviado a " << username << std::endl;
+                                << " mensajes enviado a " << username
+                                << " target=" << target << ")" << std::endl;
 
                         break;
                     }

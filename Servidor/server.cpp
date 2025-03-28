@@ -96,7 +96,7 @@ std::string extractUsername(const std::string &target)
     std::smatch match;
     if (std::regex_search(target, match, name_regex))
     {
-        return match[1];
+        return urlDecode(match[1]);
     }
     return "";
 }
@@ -112,6 +112,9 @@ void broadcastTextMessage(const std::string &message)
     std::lock_guard<std::mutex> lock(clients_mutex);
     for (auto &[user, info] : connectedUsers)
     {
+
+        std::string decodedUser = urlDecode(user);
+
         if ((info.status == UserStatus::ACTIVE || info.status == UserStatus::BUSY)
             && info.ws                                    // <-- no sea nullptr
             && info.ws->next_layer().is_open()           // <-- esté abierto

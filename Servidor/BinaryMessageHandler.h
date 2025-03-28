@@ -5,6 +5,9 @@
 #include <cstdint>
 #include <stdexcept>
 
+// Función para decodificar una cadena URL
+std::string urlDecode(const std::string &value);
+
 // Estructura para representar un mensaje binario parseado
 struct ParsedMessage {
     uint8_t code;

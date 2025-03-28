@@ -1,6 +1,28 @@
 #include "BinaryMessageHandler.h"
 #include <sstream>
 #include <iomanip>
+#include <sstream>
+#include <iomanip>
+#include <cctype>
+
+std::string urlDecode(const std::string &value)
+{
+    std::ostringstream oss;
+    for (size_t i = 0; i < value.size(); i++) {
+        if (value[i] == '%' && i + 2 < value.size() &&
+            std::isxdigit(value[i + 1]) && std::isxdigit(value[i + 2])) {
+            std::string hex = value.substr(i + 1, 2);
+            char decodedChar = static_cast<char>(std::stoi(hex, nullptr, 16));
+            oss << decodedChar;
+            i += 2;
+        } else if (value[i] == '+') {
+            oss << ' ';
+        } else {
+            oss << value[i];
+        }
+    }
+    return oss.str();
+}
 
 // Función para construir un mensaje binario:
 // Se inserta primero el código (1 byte), luego para cada campo se agrega 1 byte con la longitud y finalmente los datos.

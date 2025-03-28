@@ -16,6 +16,9 @@ MainWindow::MainWindow(QWidget *parent)
     userModel = new QStringListModel(this);
     ui->listView->setModel(userModel);
 
+    fullUserModel = new QStringListModel(this);
+    ui->userListPriv->setModel(fullUserModel);
+
     ui->changeStateComboBox->addItem("Activo", 1);
     ui->changeStateComboBox->addItem("Ocupado", 2);
 
@@ -34,6 +37,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->refreshUserList, &QPushButton::clicked, this, &MainWindow::onrefreshUserListClick);
 
     connect(ui->buscarNombreBtn, &QPushButton::clicked, this, &MainWindow::onSearchNameClicked);
+
+    connect(ui->userListPriv, &QListView::clicked, this, &MainWindow::onUserItemClicked);
+
+    connect(ui->enviarMsgPriv, &QPushButton::clicked, this, &MainWindow::on_enviarMsgPriv_clicked);
 
 }
 
@@ -108,9 +115,14 @@ void MainWindow::onConnected()
 {
     ui->statusbar->showMessage("Conectado ✅");
     QMessageBox::information(this, "Conexión", "Conectado correctamente al servidor.");
+
     QByteArray request;
     request.append(char(1));
     socket.sendBinaryMessage(request);
+
+    QByteArray listAll;
+    listAll.append(char(6));
+    socket.sendBinaryMessage(listAll);
 }
 
 void MainWindow::onErrorOccurred(QAbstractSocket::SocketError)
@@ -239,6 +251,13 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             break;
         case 4:
             errorMsg = "¡El mensaje fue enviado a un usuario con estatus desconectado!";
+
+            if (!selectedPrivateUser.isEmpty()) {
+                QMessageBox::warning(this, "Error", "El usuario está desconectado/inactivo. No puedes continuar esta conversación.");
+
+                ui->chatPriv->clear();
+            }
+
             break;
         default:
             errorMsg = "Error desconocido del servidor.";
@@ -341,12 +360,110 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             ui->changeStateComboBox->blockSignals(false);
         }
 
-        // Refrescar UI si quieres
+        // Refrescar UI
         QStringList rows;
         for (auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
             rows << QString("%1 → %2").arg(it.key(), it.value());
         }
         userModel->setStringList(rows);
+
+        QStringList fullRows;
+        for (auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
+            if (it.key() != currentUser) {
+                fullRows << QString("%1 → %2").arg(it.key(), it.value());
+            }
+        }
+        fullUserModel->setStringList(fullRows);
+
+        return;
+    }
+
+    if (code == 55) {
+        // Validar que hay al menos: len1 + username + len2 + msg
+        if (pos + 2 > data.size()) return;
+
+        uint8_t senderLen = bytes[pos++];
+        if (pos + senderLen >= data.size()) return;
+
+        QString sender = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), senderLen);
+        pos += senderLen;
+
+        if (pos >= data.size()) return;
+        uint8_t msgLen = bytes[pos++];
+
+        if (pos + msgLen > data.size()) return;
+
+        QString message = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), msgLen);
+        pos += msgLen;
+
+        qDebug() << "[PRIVADO] Remitente:" << sender
+                 << "| Destinatario esperado:" << selectedPrivateUser
+                 << "| Tú eres:" << currentUser
+                 << "| Mensaje:" << message;
+
+        // Mostrar el mensaje si es de o para el usuario seleccionado
+        if (sender == selectedPrivateUser) {
+            // Recibes un mensaje de él
+            ui->chatPriv->appendPlainText(sender + ": " + message);
+        } else if (sender == currentUser && !selectedPrivateUser.isEmpty()) {
+            // Tú enviaste el mensaje, lo recibes de vuelta del servidor (confirmación)
+            ui->chatPriv->appendPlainText("Tu: " + message);
+        }
+    }
+
+    if (code == 57) {
+
+        if (pos >= data.size()) return;
+
+        uint8_t numUsers = bytes[pos++];
+        QStringList fullRows;
+
+        userStates.clear();
+
+        for (int i = 0; i < numUsers; ++i) {
+            // Se requieren al menos 2 bytes: len + estado
+            if (pos + 2 > data.size()) {
+                qDebug() << "[WARN] No hay suficientes datos para el usuario #" << i;
+                break;
+            }
+
+            uint8_t nameLen = bytes[pos++];
+
+            // Asegurarse de que hay suficientes bytes para el nombre y el estado
+            if (pos + nameLen >= data.size()) {
+                qDebug() << "[WARN] Longitud de nombre inválida para el usuario #" << i;
+                break;
+            }
+
+            QByteArray rawName(reinterpret_cast<const char*>(bytes + pos), nameLen);
+            QString username = QString::fromUtf8(rawName);
+            if (username.contains('%')) {
+                username = QUrl::fromPercentEncoding(rawName);
+            }
+
+            pos += nameLen;
+
+            uint8_t status = bytes[pos++];
+
+            QString estado;
+            switch (status) {
+            case 0: estado = "DESACTIVADO"; break;
+            case 1: estado = "ACTIVO";      break;
+            case 2: estado = "OCUPADO";     break;
+            case 3: estado = "INACTIVO";    break;
+            default: estado = "DESCONOCIDO";
+            }
+
+            userStates[username] = estado;
+
+            qDebug() << "Usuario:" << username << "Estado:" << estado;
+
+            if (username != currentUser) {
+                fullRows << QString("%1 → %2").arg(username, estado);
+            }
+        }
+
+        fullUserModel->setStringList(fullRows);
         return;
     }
 }
@@ -369,6 +486,56 @@ void MainWindow::onManualStatusChange(int index)
     socket.sendBinaryMessage(message);
 
 }
+
+void MainWindow::onUserItemClicked(const QModelIndex &index)
+{
+    QString selectedText = fullUserModel->data(index, Qt::DisplayRole).toString();
+    QString username = selectedText.section("→", 0, 0).trimmed();
+
+    if (username == currentUser) {
+        QMessageBox::information(this, "Info", "No puedes chatear contigo mismo.");
+        return;
+    }
+
+    selectedPrivateUser = username;
+    qDebug() << "[CHAT PRIVADO] Usuario seleccionado:" << selectedPrivateUser;
+
+    ui->chatPriv->clear();
+    ui->chatPriv->appendPlainText("📨 Chat con " + username);
+}
+
+void MainWindow::on_enviarMsgPriv_clicked()
+{
+    if (selectedPrivateUser == currentUser) {
+        QMessageBox::warning(this, "Error", "No puedes enviarte mensajes a ti mismo.");
+        return;
+    }
+
+    if (selectedPrivateUser.isEmpty()) {
+        QMessageBox::warning(this, "Error", "No has seleccionado un usuario para chatear.");
+        return;
+    }
+
+    QString msg = ui->privMsgTextEdit->toPlainText().trimmed();
+    if (msg.isEmpty()) return;
+
+    QByteArray data;
+    data.append(char(4)); // ID 4 = SEND_MESSAGE
+
+    QByteArray userBytes = selectedPrivateUser.toUtf8();
+    QByteArray msgBytes = msg.toUtf8();
+
+    data.append(char(userBytes.length()));
+    data.append(userBytes);
+    data.append(char(msgBytes.length()));
+    data.append(msgBytes);
+
+    socket.sendBinaryMessage(data);
+
+    ui->privMsgTextEdit->clear();
+}
+
+
 
 
 

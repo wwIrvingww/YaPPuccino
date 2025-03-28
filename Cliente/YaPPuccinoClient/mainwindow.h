@@ -31,6 +31,8 @@ private slots:
     void onManualStatusChange(int index);
     void onrefreshUserListClick();
     void onSearchNameClicked();
+    void onUserItemClicked(const QModelIndex &index);
+    void on_enviarMsgPriv_clicked();
 
 private:
     Ui::MainWindow *ui;
@@ -38,6 +40,8 @@ private:
     QNetworkAccessManager http;
     QString currentUser;
     QStringListModel *userModel;
+    QStringListModel *fullUserModel;
     QHash<QString, QString> userStates;
+    QString selectedPrivateUser;
 };
 #endif // MAINWINDOW_H

@@ -467,7 +467,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                             }
                             else
                             {
-                                auto errMsg = buildBinaryMessage(MessageCode::ERROR_RESPONSE, {{static_cast<unsigned char>(ErrorCode::USER_DISCONNECTED)}});
+                                auto errMsg = buildRawBinaryMessage(MessageCode::ERROR_RESPONSE, {{static_cast<unsigned char>(ErrorCode::USER_DISCONNECTED)}});
                                 sendBinaryMessage(ws, errMsg);
                                 std::cerr << "[INFO] Usuario " << username << " intentó enviar mensaje a usuario desconectado: " << dest << std::endl;
                             }
@@ -515,7 +515,26 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                         break;
                     }
 
+                    case MessageCode::LIST_ALL_USERS:
+                    {
+                        std::lock_guard<std::mutex> lock(clients_mutex);
 
+                        std::vector<unsigned char> resp;
+                        resp.push_back(MessageCode::RESPONSE_ALL_USERS); // o RESPONSE_LIST_ALL_USERS si querés diferenciar
+
+                        size_t count = connectedUsers.size();
+                        resp.push_back(static_cast<unsigned char>(count));
+
+                        for (const auto &[_, info] : connectedUsers) {
+                            resp.push_back(static_cast<unsigned char>(info.username.size()));
+                            resp.insert(resp.end(), info.username.begin(), info.username.end());
+                            resp.push_back(static_cast<unsigned char>(info.status));
+                        }
+
+                        sendBinaryMessage(ws, resp);
+                        std::cout << "→ Enviado listado completo de " << count << " usuarios a " << username << "\n";
+                        break;
+                    }
 
                     case MessageCode::GET_USER:
                     {

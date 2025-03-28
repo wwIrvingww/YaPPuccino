@@ -29,6 +29,7 @@ namespace MessageCode {
     const uint8_t CHANGE_STATUS  = 3;
     const uint8_t SEND_MESSAGE   = 4;
     const uint8_t GET_HISTORY    = 5;
+    const uint8_t LIST_ALL_USERS = 6;
 
     // Respuestas y notificaciones del servidor
     const uint8_t ERROR_RESPONSE       = 50;
@@ -38,6 +39,7 @@ namespace MessageCode {
     const uint8_t USER_STATUS_CHANGED  = 54;
     const uint8_t MESSAGE_RECEIVED     = 55;
     const uint8_t RESPONSE_HISTORY     = 56;
+    const uint8_t RESPONSE_ALL_USERS   = 57;
 }
 
 // Códigos de error definidos en el protocolo

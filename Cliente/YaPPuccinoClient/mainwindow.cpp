@@ -200,10 +200,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             }
 
             QByteArray rawName(reinterpret_cast<const char*>(bytes + pos), nameLen);
-            QString username = QString::fromUtf8(rawName);
-            if (username.contains('%')) {
-                username = QUrl::fromPercentEncoding(rawName);
-            }
+            QString username = QUrl::fromPercentEncoding(rawName);
             pos += nameLen;
 
             uint8_t status = bytes[pos++];
@@ -282,7 +279,8 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             return;
         }
 
-        QString username = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), nameLen);
+        QByteArray rawName(reinterpret_cast<const char*>(bytes + pos), nameLen);
+        QString username = QUrl::fromPercentEncoding(rawName);
         pos += nameLen;
 
         if (pos >= data.size()) {
@@ -309,7 +307,8 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         if (pos + 2 > data.size()) return;
 
         uint8_t nameLen = bytes[pos++];
-        QString username = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), nameLen);
+        QByteArray rawName(reinterpret_cast<const char*>(bytes + pos), nameLen);
+        QString username = QUrl::fromPercentEncoding(rawName);
         pos += nameLen;
 
         uint8_t stateCode = bytes[pos++];
@@ -385,8 +384,9 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         uint8_t senderLen = bytes[pos++];
         if (pos + senderLen >= data.size()) return;
 
-        QString sender = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), senderLen);
+        QByteArray rawSender(reinterpret_cast<const char*>(bytes + pos), senderLen);
         pos += senderLen;
+        QString sender = QUrl::fromPercentEncoding(rawSender);
 
         if (pos >= data.size()) return;
         uint8_t msgLen = bytes[pos++];
@@ -436,11 +436,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             }
 
             QByteArray rawName(reinterpret_cast<const char*>(bytes + pos), nameLen);
-            QString username = QString::fromUtf8(rawName);
-            if (username.contains('%')) {
-                username = QUrl::fromPercentEncoding(rawName);
-            }
-
+            QString username = QUrl::fromPercentEncoding(rawName);
             pos += nameLen;
 
             uint8_t status = bytes[pos++];

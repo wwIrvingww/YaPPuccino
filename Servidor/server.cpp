@@ -426,6 +426,21 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                             sendBinaryMessage(ws, errMsg);
                             break;
                         }
+
+                        bool needReactivate = false;
+                        {
+                            std::lock_guard<std::mutex> lock(clients_mutex);
+                            auto &info = connectedUsers[username];
+                            if (info.status == UserStatus::INACTIVE) {
+                                needReactivate = true;
+                            }
+                        }
+                        
+                        if (needReactivate) {
+                            std::cout << "Reactivando usuario " << username << " por mensaje SEND_MESSAGE" << std::endl;
+                            setUserStatus(username, UserStatus::ACTIVE, true);
+                        }
+
                         // Si el mensaje es para el chat general, el destino es "~"
                         if (dest == "~")
                         {
@@ -458,7 +473,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                             appendPrivateHistory(username, dest, message);
 
                             // Solo envia mensajes a los activos y ocupadsos
-                            if (connectedUsers.count(dest) && connectedUsers[dest].status == UserStatus::ACTIVE || connectedUsers[dest].status == UserStatus::BUSY)
+                            if (connectedUsers.count(dest) && connectedUsers[dest].status == UserStatus::ACTIVE || connectedUsers[dest].status == UserStatus::BUSY || connectedUsers[dest].status == UserStatus::INACTIVE)
                             {
                                 auto binOut = buildBinaryMessage(MessageCode::MESSAGE_RECEIVED, {std::vector<unsigned char>(username.begin(), username.end()),
                                                                                                  std::vector<unsigned char>(message.begin(), message.end())});

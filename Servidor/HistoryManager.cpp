@@ -4,7 +4,7 @@
 #include <string>
 #include <iostream>
 
-static const std::string HISTORY_FILE = "/home/ubuntu/YaPPuccino/Servidor/general.txt";
+static const std::string HISTORY_FILE = "/home/ubuntu/YaPPuccino/Servidor/History/general.txt";
 
 // Cada línea del archivo: "username|mensaje"
 void appendToHistory(const std::string &user, const std::string &msg)

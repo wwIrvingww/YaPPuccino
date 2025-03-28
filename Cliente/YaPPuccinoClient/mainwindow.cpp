@@ -404,10 +404,10 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         // Mostrar el mensaje si es de o para el usuario seleccionado
         if (sender == selectedPrivateUser) {
             // Recibes un mensaje de él
-            ui->chatPriv->appendPlainText(sender + ": " + message);
+            ui->chatPriv->appendHtml("<p style='margin: 8px 0'><b>" + sender + ":</b> " + message.toHtmlEscaped() + "</p>");
         } else if (sender == currentUser && !selectedPrivateUser.isEmpty()) {
             // Tú enviaste el mensaje, lo recibes de vuelta del servidor (confirmación)
-            ui->chatPriv->appendPlainText("Tu: " + message);
+            ui->chatPriv->appendHtml("<p style='margin: 8px 0'><b>Tú:</b> " + message.toHtmlEscaped() + "</p>");
         }
     }
 
@@ -418,7 +418,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         uint8_t numUsers = bytes[pos++];
         QStringList fullRows;
 
-        userStates.clear();
+        allUserStates.clear();
 
         for (int i = 0; i < numUsers; ++i) {
             // Se requieren al menos 2 bytes: len + estado
@@ -454,7 +454,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             default: estado = "DESCONOCIDO";
             }
 
-            userStates[username] = estado;
+            allUserStates[username] = estado;
 
             qDebug() << "Usuario:" << username << "Estado:" << estado;
 

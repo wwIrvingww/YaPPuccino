@@ -42,6 +42,7 @@ private:
     QStringListModel *userModel;
     QStringListModel *fullUserModel;
     QHash<QString, QString> userStates;
+    QMap<QString, QString> allUserStates;
     QString selectedPrivateUser;
 };
 #endif // MAINWINDOW_H

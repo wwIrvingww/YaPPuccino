@@ -367,13 +367,6 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         }
 
 
-
-
-
-
-
-
-
         // Refrescar UI
         QStringList rows;
         for (auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
@@ -393,21 +386,18 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
     }
 
     if (code == 55) {
-        // Validar que hay al menos: len1 + username + len2 + msg
+        // Validar que hay al menos: len del remitente + remitente + len del mensaje + mensaje
         if (pos + 2 > data.size()) return;
 
         uint8_t senderLen = bytes[pos++];
-        if (pos + senderLen >= data.size()) return;
-
+        if (pos + senderLen > data.size()) return;
         QByteArray rawSender(reinterpret_cast<const char*>(bytes + pos), senderLen);
         pos += senderLen;
         QString sender = QUrl::fromPercentEncoding(rawSender);
 
         if (pos >= data.size()) return;
         uint8_t msgLen = bytes[pos++];
-
         if (pos + msgLen > data.size()) return;
-
         QString message = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), msgLen);
         pos += msgLen;
 
@@ -416,15 +406,30 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
                  << "| Tú eres:" << currentUser
                  << "| Mensaje:" << message;
 
-        // Mostrar el mensaje si es de o para el usuario seleccionado
+        // --- NUEVAS MODIFICACIONES INTEGRADAS ---
+        // Actualizar la hora del último mensaje recibido para este remitente
+        lastMessageTime[sender] = QDateTime::currentDateTime();
+
+        // Si el chat activo (selectedPrivateUser) no es de este remitente,
+        // marcarlo como que tiene mensajes nuevos; si se está chateando con él, quitar la marca.
+        if (sender != selectedPrivateUser)
+            newMessageUsers.insert(sender);
+        else
+            newMessageUsers.remove(sender);
+
+        // Actualizar la lista de usuarios para reordenar y agregar asterisco
+        updateUserListModel();
+        // --- FIN MODIFICACIONES ---
+
+        // Mostrar el mensaje en el chat privado (según corresponda)
         if (sender == selectedPrivateUser) {
-            // Recibes un mensaje de él
             ui->chatPriv->appendHtml("<p style='margin: 8px 0'><b>" + sender + ":</b> " + message.toHtmlEscaped() + "</p>");
         } else if (sender == currentUser && !selectedPrivateUser.isEmpty()) {
-            // Tú enviaste el mensaje, lo recibes de vuelta del servidor (confirmación)
             ui->chatPriv->appendHtml("<p style='margin: 8px 0'><b>Tú:</b> " + message.toHtmlEscaped() + "</p>");
         }
     }
+
+
 
     // Dentro de onBinaryMessageReceived, agrega la siguiente rama para code == 56 (RESPONSE_HISTORY)
     else if (code == 56) { // RESPONSE_HISTORY
@@ -547,14 +552,16 @@ void MainWindow::onUserItemClicked(const QModelIndex &index)
 {
     QString selectedText = fullUserModel->data(index, Qt::DisplayRole).toString();
     QString username = selectedText.section("→", 0, 0).trimmed();
-
     if (username == currentUser) {
         QMessageBox::information(this, "Info", "No puedes chatear contigo mismo.");
         return;
     }
-
     selectedPrivateUser = username;
     qDebug() << "[CHAT PRIVADO] Usuario seleccionado:" << selectedPrivateUser;
+
+    // Al abrir el chat, se quita el indicador de mensaje nuevo
+    newMessageUsers.remove(username);
+    updateUserListModel();
 
     ui->chatPriv->clear();
     ui->chatPriv->appendPlainText("📨 Chat con " + username);
@@ -619,5 +626,31 @@ void MainWindow::on_historyPriv_clicked()
 
     socket.sendBinaryMessage(req);
     ui->statusbar->showMessage("Solicitando historial privado con " + selectedPrivateUser + "...");
+}
+
+
+void MainWindow::updateUserListModel() {
+    QList<QString> users;
+    for (auto it = allUserStates.constBegin(); it != allUserStates.constEnd(); ++it) {
+        users.append(it.key());
+    }
+
+    std::sort(users.begin(), users.end(), [this](const QString &a, const QString &b) {
+        QDateTime ta = lastMessageTime.value(a, QDateTime());
+        QDateTime tb = lastMessageTime.value(b, QDateTime());
+        if (!ta.isValid() && !tb.isValid())
+            return a < b;
+        return ta > tb;
+    });
+
+    QStringList rows;
+    for (const QString &user : users) {
+        QString estado = allUserStates.value(user, "DESCONOCIDO");
+        QString display = QString("%1 → %2").arg(user, estado);
+        if (newMessageUsers.contains(user))
+            display += " *";
+        rows << display;
+    }
+    fullUserModel->setStringList(rows);
 }
 

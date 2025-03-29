@@ -5,6 +5,9 @@
 #include <QtWebSockets/QtWebSockets>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include <QDateTime>
+#include <QSet>
+#include <QStringListModel>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -35,6 +38,7 @@ private slots:
     void on_enviarMsgPriv_clicked();
     void on_historyGeneral_clicked();
     void on_historyPriv_clicked();
+    void updateUserListModel();
 
 private:
     Ui::MainWindow *ui;
@@ -46,5 +50,8 @@ private:
     QHash<QString, QString> userStates;
     QMap<QString, QString> allUserStates;
     QString selectedPrivateUser;
+    QMap<QString, QDateTime> lastMessageTime;
+    QSet<QString> newMessageUsers;
 };
+
 #endif // MAINWINDOW_H

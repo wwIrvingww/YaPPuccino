@@ -406,20 +406,17 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
                  << "| Tú eres:" << currentUser
                  << "| Mensaje:" << message;
 
-        // --- NUEVAS MODIFICACIONES INTEGRADAS ---
         // Actualizar la hora del último mensaje recibido para este remitente
         lastMessageTime[sender] = QDateTime::currentDateTime();
 
-        // Si el chat activo (selectedPrivateUser) no es de este remitente,
-        // marcarlo como que tiene mensajes nuevos; si se está chateando con él, quitar la marca.
-        if (sender != selectedPrivateUser)
+        // Insertar el asterisco solo si el remitente NO es tú y NO es el chat activo
+        if (sender != currentUser && sender != selectedPrivateUser)
             newMessageUsers.insert(sender);
         else
             newMessageUsers.remove(sender);
 
         // Actualizar la lista de usuarios para reordenar y agregar asterisco
         updateUserListModel();
-        // --- FIN MODIFICACIONES ---
 
         // Mostrar el mensaje en el chat privado (según corresponda)
         if (sender == selectedPrivateUser) {
@@ -428,8 +425,6 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             ui->chatPriv->appendHtml("<p style='margin: 8px 0'><b>Tú:</b> " + message.toHtmlEscaped() + "</p>");
         }
     }
-
-
 
     // Dentro de onBinaryMessageReceived, agrega la siguiente rama para code == 56 (RESPONSE_HISTORY)
     else if (code == 56) { // RESPONSE_HISTORY
@@ -601,6 +596,10 @@ void MainWindow::on_enviarMsgPriv_clicked()
 // Slot para solicitar historial general
 void MainWindow::on_historyGeneral_clicked()
 {
+    // Asegurarse de que se trate de un historial general
+    selectedPrivateUser.clear();
+    ui->chatPriv->clear(); // Opcional: limpiar el chat privado
+
     // Construir request: code = 5 (GET_HISTORY), campo[0] = "~"
     QByteArray req;
     req.append(char(5)); // GET_HISTORY
@@ -610,6 +609,7 @@ void MainWindow::on_historyGeneral_clicked()
     socket.sendBinaryMessage(req);
     ui->statusbar->showMessage("Solicitando historial general...");
 }
+
 
 // Slot para solicitar historial privado
 void MainWindow::on_historyPriv_clicked()
@@ -628,13 +628,13 @@ void MainWindow::on_historyPriv_clicked()
     ui->statusbar->showMessage("Solicitando historial privado con " + selectedPrivateUser + "...");
 }
 
-
 void MainWindow::updateUserListModel() {
     QList<QString> users;
+    // Usamos allUserStates para la lista completa; asegúrate de que se actualice en otros bloques (por ejemplo, en code 57)
     for (auto it = allUserStates.constBegin(); it != allUserStates.constEnd(); ++it) {
         users.append(it.key());
     }
-
+    // Ordenar por la hora del último mensaje (más reciente primero)
     std::sort(users.begin(), users.end(), [this](const QString &a, const QString &b) {
         QDateTime ta = lastMessageTime.value(a, QDateTime());
         QDateTime tb = lastMessageTime.value(b, QDateTime());
@@ -643,6 +643,7 @@ void MainWindow::updateUserListModel() {
         return ta > tb;
     });
 
+    // Construir la lista final: si el usuario tiene mensajes nuevos, agregamos un asterisco.
     QStringList rows;
     for (const QString &user : users) {
         QString estado = allUserStates.value(user, "DESCONOCIDO");

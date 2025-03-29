@@ -366,49 +366,10 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             ui->changeStateComboBox->blockSignals(false);
         }
 
-        else if (code == 56) { // RESPONSE_HISTORY
-            qDebug() << "[HISTORIAL] Se recibió código 56";
-            int pos = 1; // ya se consumió el código (data[0])
-            if (pos >= data.size()) return;
 
-            // 1) Leer el número de mensajes (N)
-            uint8_t num = data[pos++];
-            qDebug() << "[HISTORIAL] Número de mensajes:" << num;
 
-            // Determinar dónde mostrar el historial:
-            // Si selectedPrivateUser está vacío, se asume historial general, de lo contrario, es privado.
-            bool isGeneral = selectedPrivateUser.isEmpty();
-            if (isGeneral) {
-                ui->chatGeneralTextEdit->clear();
-            } else {
-                ui->chatPriv->clear();
-            }
 
-            // 2) Recorrer N mensajes
-            for (int i = 0; i < num; i++) {
-                if (pos >= data.size()) break;
-                uint8_t lenUser = data[pos++];
-                if (pos + lenUser > data.size()) break;
-                QString user = QString::fromUtf8((const char*)data.constData() + pos, lenUser);
-                pos += lenUser;
 
-                if (pos >= data.size()) break;
-                uint8_t lenMsg = data[pos++];
-                if (pos + lenMsg > data.size()) break;
-                QString msg = QString::fromUtf8((const char*)data.constData() + pos, lenMsg);
-                pos += lenMsg;
-
-                qDebug() << "[HISTORIAL] Mensaje" << i << ":" << user << ":" << msg;
-                QString line = user + ": " + msg.toHtmlEscaped();
-                if (isGeneral) {
-                    ui->chatGeneralTextEdit->append(line);
-                } else {
-                    ui->chatPriv->appendHtml("<p><b>" + user + ":</b> " + msg.toHtmlEscaped() + "</p>");
-                }
-            }
-
-            ui->statusbar->showMessage("Historial recibido: " + QString::number(num) + " mensajes.");
-        }
 
 
 
@@ -463,6 +424,51 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             // Tú enviaste el mensaje, lo recibes de vuelta del servidor (confirmación)
             ui->chatPriv->appendHtml("<p style='margin: 8px 0'><b>Tú:</b> " + message.toHtmlEscaped() + "</p>");
         }
+    }
+
+    // Dentro de onBinaryMessageReceived, agrega la siguiente rama para code == 56 (RESPONSE_HISTORY)
+    else if (code == 56) { // RESPONSE_HISTORY
+        qDebug() << "[HISTORIAL] Se recibió código 56";
+        int pos = 1; // Ya se consumió el code (data[0])
+        if (pos >= data.size()) return;
+
+        // 1) Leer el número de mensajes (N)
+        uint8_t num = data[pos++];
+        qDebug() << "[HISTORIAL] Número de mensajes:" << num;
+
+        // Determinar dónde mostrar el historial:
+        // Si selectedPrivateUser está vacío, es general; de lo contrario, es privado.
+        bool isGeneral = selectedPrivateUser.isEmpty();
+        if (isGeneral) {
+            ui->chatGeneralTextEdit->clear();
+        } else {
+            ui->chatPriv->clear();
+        }
+
+        // 2) Recorrer los N mensajes
+        for (int i = 0; i < num; i++) {
+            if (pos >= data.size()) break;
+            uint8_t lenUser = data[pos++];
+            if (pos + lenUser > data.size()) break;
+            QString user = QString::fromUtf8((const char*)data.constData() + pos, lenUser);
+            pos += lenUser;
+
+            if (pos >= data.size()) break;
+            uint8_t lenMsg = data[pos++];
+            if (pos + lenMsg > data.size()) break;
+            QString msg = QString::fromUtf8((const char*)data.constData() + pos, lenMsg);
+            pos += lenMsg;
+
+            qDebug() << "[HISTORIAL] Mensaje" << i << ":" << user << ":" << msg;
+            QString line = user + ": " + msg.toHtmlEscaped();
+            if (isGeneral) {
+                ui->chatGeneralTextEdit->append(line);
+            } else {
+                ui->chatPriv->appendHtml("<p><b>" + user + ":</b> " + msg.toHtmlEscaped() + "</p>");
+            }
+        }
+
+        ui->statusbar->showMessage("Historial recibido: " + QString::number(num) + " mensajes.");
     }
 
     if (code == 57) {
@@ -585,8 +591,10 @@ void MainWindow::on_enviarMsgPriv_clicked()
     ui->privMsgTextEdit->clear();
 }
 
+// Slot para solicitar historial general
 void MainWindow::on_historyGeneral_clicked()
 {
+    // Construir request: code = 5 (GET_HISTORY), campo[0] = "~"
     QByteArray req;
     req.append(char(5)); // GET_HISTORY
     req.append(char(1)); // longitud = 1
@@ -596,6 +604,7 @@ void MainWindow::on_historyGeneral_clicked()
     ui->statusbar->showMessage("Solicitando historial general...");
 }
 
+// Slot para solicitar historial privado
 void MainWindow::on_historyPriv_clicked()
 {
     if (selectedPrivateUser.isEmpty()) {
@@ -611,11 +620,4 @@ void MainWindow::on_historyPriv_clicked()
     socket.sendBinaryMessage(req);
     ui->statusbar->showMessage("Solicitando historial privado con " + selectedPrivateUser + "...");
 }
-
-
-
-
-
-
-
 

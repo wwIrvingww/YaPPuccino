@@ -22,6 +22,13 @@ MainWindow::MainWindow(QWidget *parent)
     ui->changeStateComboBox->addItem("Activo", 1);
     ui->changeStateComboBox->addItem("Ocupado", 2);
 
+    connect(ui->historyGeneral, &QPushButton::clicked,
+            this, &MainWindow::on_historyGeneral_clicked);
+
+    connect(ui->historyPriv, &QPushButton::clicked,
+            this, &MainWindow::on_historyPriv_clicked);
+
+
     connect(&socket, &QWebSocket::binaryMessageReceived, this, &MainWindow::onBinaryMessageReceived);
     connect(&socket, &QWebSocket::connected, this, &MainWindow::onConnected);
     connect(&socket, &QWebSocket::disconnected, this, &MainWindow::onDisconnected);
@@ -359,6 +366,53 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             ui->changeStateComboBox->blockSignals(false);
         }
 
+        else if (code == 56) { // RESPONSE_HISTORY
+            qDebug() << "[HISTORIAL] Se recibió código 56";
+            int pos = 1; // ya se consumió el código (data[0])
+            if (pos >= data.size()) return;
+
+            // 1) Leer el número de mensajes (N)
+            uint8_t num = data[pos++];
+            qDebug() << "[HISTORIAL] Número de mensajes:" << num;
+
+            // Determinar dónde mostrar el historial:
+            // Si selectedPrivateUser está vacío, se asume historial general, de lo contrario, es privado.
+            bool isGeneral = selectedPrivateUser.isEmpty();
+            if (isGeneral) {
+                ui->chatGeneralTextEdit->clear();
+            } else {
+                ui->chatPriv->clear();
+            }
+
+            // 2) Recorrer N mensajes
+            for (int i = 0; i < num; i++) {
+                if (pos >= data.size()) break;
+                uint8_t lenUser = data[pos++];
+                if (pos + lenUser > data.size()) break;
+                QString user = QString::fromUtf8((const char*)data.constData() + pos, lenUser);
+                pos += lenUser;
+
+                if (pos >= data.size()) break;
+                uint8_t lenMsg = data[pos++];
+                if (pos + lenMsg > data.size()) break;
+                QString msg = QString::fromUtf8((const char*)data.constData() + pos, lenMsg);
+                pos += lenMsg;
+
+                qDebug() << "[HISTORIAL] Mensaje" << i << ":" << user << ":" << msg;
+                QString line = user + ": " + msg.toHtmlEscaped();
+                if (isGeneral) {
+                    ui->chatGeneralTextEdit->append(line);
+                } else {
+                    ui->chatPriv->appendHtml("<p><b>" + user + ":</b> " + msg.toHtmlEscaped() + "</p>");
+                }
+            }
+
+            ui->statusbar->showMessage("Historial recibido: " + QString::number(num) + " mensajes.");
+        }
+
+
+
+
         // Refrescar UI
         QStringList rows;
         for (auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
@@ -530,6 +584,36 @@ void MainWindow::on_enviarMsgPriv_clicked()
 
     ui->privMsgTextEdit->clear();
 }
+
+void MainWindow::on_historyGeneral_clicked()
+{
+    QByteArray req;
+    req.append(char(5)); // GET_HISTORY
+    req.append(char(1)); // longitud = 1
+    req.append("~");     // "~" indica historial general
+
+    socket.sendBinaryMessage(req);
+    ui->statusbar->showMessage("Solicitando historial general...");
+}
+
+void MainWindow::on_historyPriv_clicked()
+{
+    if (selectedPrivateUser.isEmpty()) {
+        QMessageBox::warning(this, "Error", "No has seleccionado un usuario para chat privado.");
+        return;
+    }
+    QByteArray req;
+    req.append(char(5)); // GET_HISTORY
+    QByteArray other = selectedPrivateUser.toUtf8();
+    req.append(char(other.size()));
+    req.append(other);
+
+    socket.sendBinaryMessage(req);
+    ui->statusbar->showMessage("Solicitando historial privado con " + selectedPrivateUser + "...");
+}
+
+
+
 
 
 

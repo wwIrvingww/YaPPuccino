@@ -33,6 +33,8 @@ private slots:
     void onSearchNameClicked();
     void onUserItemClicked(const QModelIndex &index);
     void on_enviarMsgPriv_clicked();
+    void on_historyGeneral_clicked();
+    void on_historyPriv_clicked();
 
 private:
     Ui::MainWindow *ui;

@@ -52,6 +52,7 @@ private:
     QString selectedPrivateUser;
     QMap<QString, QDateTime> lastMessageTime;
     QSet<QString> newMessageUsers;
+    bool useCode57 = true;
 };
 
 #endif // MAINWINDOW_H

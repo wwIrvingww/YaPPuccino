@@ -123,13 +123,20 @@ void MainWindow::onConnected()
     ui->statusbar->showMessage("Conectado ✅");
     QMessageBox::information(this, "Conexión", "Conectado correctamente al servidor.");
 
+    qDebug() << "[DEBUG] useCode57 está en:" << (useCode57 ? "true (usando código 57)" : "false (usando código 51)");
+
     QByteArray request;
     request.append(char(1));
     socket.sendBinaryMessage(request);
 
-    QByteArray listAll;
-    listAll.append(char(6));
-    socket.sendBinaryMessage(listAll);
+    if (useCode57) {
+        QByteArray listAll;
+        listAll.append(char(6));
+        socket.sendBinaryMessage(listAll);
+        qDebug() << "[DEBUG] Enviado code 6 para obtener lista completa (esperando respuesta code 57)";
+    } else {
+        qDebug() << "[DEBUG] Solo se usará la lista de usuarios conectados (code 51)";
+    }
 }
 
 void MainWindow::onErrorOccurred(QAbstractSocket::SocketError)
@@ -191,6 +198,9 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         uint8_t numUsers = bytes[pos++];
         userStates.clear();
 
+        QStringList rows;
+        QStringList fullRows;
+
         for (int i = 0; i < numUsers; ++i) {
             // Se requieren al menos 2 bytes: len + estado
             if (pos + 2 > data.size()) {
@@ -223,14 +233,29 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
 
             qDebug() << "Usuario:" << username << "Estado:" << estado;
             userStates[username] = estado;
+
+            rows << QString("%1 → %2").arg(username, estado);
+
+            if (!useCode57 && username != currentUser) {
+                fullRows << QString("%1 → %2").arg(username, estado);
+                allUserStates[username] = estado;
+            }
         }
 
-        // Actualizar la vista
-        QStringList rows;
-        for (auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
-            rows << QString("%1 → %2").arg(it.key(), it.value());
-        }
         userModel->setStringList(rows);
+
+        qDebug() << "[DEBUG] Procesando respuesta con código 51 (usuarios conectados)";
+
+        if (!useCode57) {
+            qDebug() << "[DEBUG] useCode57 es false → también se usará esta lista para userListPriv";
+            fullUserModel->setStringList(fullRows);
+
+            qDebug() << "[DEBUG] Lista cargada para userListPriv desde code 51:";
+            for (const QString &row : fullRows) {
+                qDebug() << "→" << row;
+            }
+        }
+
         return;
     }
 
@@ -323,6 +348,12 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         if (stateCode == 0) {
             // Usuario desconectado: eliminarlo del mapa
             userStates.remove(username);
+
+            if (useCode57) {
+                allUserStates[username] = "DESACTIVADO";
+                qDebug() << "[DEBUG] Usuario" << username << "cambiado a estado DESACTIVADO en allUserStates";
+            }
+
         } else {
             QString estado;
             switch (stateCode) {
@@ -334,6 +365,10 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
             }
 
             userStates[username] = estado;
+
+            if (useCode57) {
+                allUserStates[username] = estado;
+            }
         }
 
         // Si el cambio es del usuario actual
@@ -374,13 +409,17 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         }
         userModel->setStringList(rows);
 
-        QStringList fullRows;
-        for (auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
-            if (it.key() != currentUser) {
-                fullRows << QString("%1 → %2").arg(it.key(), it.value());
+        if (useCode57) {
+            updateUserListModel();
+        } else {
+            QStringList fullRows;
+            for (auto it = userStates.constBegin(); it != userStates.constEnd(); ++it) {
+                if (it.key() != currentUser) {
+                    fullRows << QString("%1 → %2").arg(it.key(), it.value());
+                }
             }
+            fullUserModel->setStringList(fullRows);
         }
-        fullUserModel->setStringList(fullRows);
 
         return;
     }
@@ -473,6 +512,8 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
 
     if (code == 57) {
 
+        qDebug() << "[DEBUG] Procesando respuesta con código 57 (usuarios completos)";
+
         if (pos >= data.size()) return;
 
         uint8_t numUsers = bytes[pos++];
@@ -520,6 +561,12 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         }
 
         fullUserModel->setStringList(fullRows);
+
+        qDebug() << "[DEBUG] Lista cargada para userListPriv desde code 57:";
+        for (const QString &row : fullRows) {
+            qDebug() << "→" << row;
+        }
+
         return;
     }
 }

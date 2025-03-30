@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.19)
 project(YaPPuccinoClient LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC on)
+
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets WebSockets)
 
 qt_standard_project_setup()
@@ -11,6 +15,7 @@ qt_add_executable(YaPPuccinoClient
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui
+    Images.qrc
 )
 
 target_link_libraries(YaPPuccinoClient

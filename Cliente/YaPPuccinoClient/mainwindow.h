@@ -8,6 +8,7 @@
 #include <QDateTime>
 #include <QSet>
 #include <QStringListModel>
+#include <QSystemTrayIcon>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -54,6 +55,7 @@ private:
     QSet<QString> newMessageUsers;
     bool useCode57 = true;
     QString currentUserStatus = "ACTIVO";
+    QSystemTrayIcon *trayIcon;
 };
 
 #endif // MAINWINDOW_H

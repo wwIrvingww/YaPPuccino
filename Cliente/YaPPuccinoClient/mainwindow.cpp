@@ -61,6 +61,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->enviarMsgPriv, &QPushButton::clicked, this, &MainWindow::on_enviarMsgPriv_clicked);
 
+    trayIcon = new QSystemTrayIcon(this);
+    trayIcon->setIcon(QIcon(":/vergil.jpg"));
+    trayIcon->setVisible(true);
+
 }
 
 MainWindow::~MainWindow()
@@ -459,11 +463,6 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
 
     if (code == 55) {
 
-        if (currentUserStatus == "OCUPADO") {
-            qDebug() << "[DEBUG] Usuario en estado OCUPADO. Mensaje ocultado.";
-            return;
-        }
-
         // Validar que hay al menos: len del remitente + remitente + len del mensaje + mensaje
         if (pos + 2 > data.size()) return;
 
@@ -488,11 +487,24 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         lastMessageTime[sender] = QDateTime::currentDateTime();
 
         // Insertar el asterisco solo si el remitente NO es tú y NO es el chat activo
-        if (sender != currentUser && sender != selectedPrivateUser)
+        if (sender != currentUser && sender != selectedPrivateUser){
             newMessageUsers.insert(sender);
-        else
-            newMessageUsers.remove(sender);
 
+            if (currentUserStatus != "OCUPADO") {
+                trayIcon->showMessage(
+                    "Nuevo mensaje privado",
+                    QString("Mensaje de %1").arg(sender),
+                    QSystemTrayIcon::Information,
+                    4000
+                    );
+            } else {
+                qDebug() << "[DEBUG] Mensaje de" << sender << "ocultado por estado OCUPADO.";
+            }
+
+        }
+        else {
+            newMessageUsers.remove(sender);
+        }
         // Actualizar la lista de usuarios para reordenar y agregar asterisco
         updateUserListModel();
 

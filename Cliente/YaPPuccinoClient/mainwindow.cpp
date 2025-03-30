@@ -771,3 +771,37 @@ void MainWindow::updateUserListModel() {
     fullUserModel->setStringList(rows);
 }
 
+
+void MainWindow::on_exit_clicked()
+{
+    if (socket.isValid() && socket.state() == QAbstractSocket::ConnectedState) {
+        socket.close();  // Cierra el WebSocket
+        ui->statusbar->showMessage("Desconectado manualmente.");
+        QMessageBox::information(this, "Desconexión", "Has salido del servidor.");
+        close();
+    } else {
+        QMessageBox::warning(this, "Info", "No estás conectado.");
+    }
+}
+
+
+void MainWindow::on_help_clicked()
+{
+    QString ayuda =
+        "📌 <b>Guía Rápida del Chat</b><br><br>"
+        "✅ <b>Conexión:</b> Ingresa tu nombre y presiona 'Conectar'.<br>"
+        "💬 <b>Mensajes Generales:</b> Escribe en el campo de texto inferior y presiona 'Enviar'.<br>"
+        "🔒 <b>Mensajes Privados:</b> Selecciona un usuario en la lista privada y escribe tu mensaje.<br>"
+        "📜 <b>Historial:</b> Puedes ver mensajes pasados con los botones de historial.<br>"
+        "📶 <b>Estados:</b> Cambia tu estado a Activo, Ocupado o espera a ser Inactivo.<br>"
+        "🚪 <b>Salir:</b> Usa el botón 'Salir' para desconectarte manualmente.<br><br>"
+        "Para cualquier error, verifica tu conexión o nombre de usuario.";
+
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("Ayuda");
+    msgBox.setTextFormat(Qt::RichText);
+    msgBox.setText(ayuda);
+    msgBox.setIcon(QMessageBox::Information);
+    msgBox.exec();
+}
+

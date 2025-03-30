@@ -69,18 +69,15 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-
 void MainWindow::notificationMessage(const QString &title, const QString &message)
 {
     QMessageBox *notif = new QMessageBox(this);
     notif->setWindowTitle(title);
     notif->setText(message);
     notif->setIcon(QMessageBox::Information);
-    notif->setStandardButtons(QMessageBox::NoButton);
+    notif->setStandardButtons(QMessageBox::Ok);
     notif->setWindowFlag(Qt::Tool);
     notif->show();
-
-    QTimer::singleShot(3000, notif, &QMessageBox::close);
 }
 
 void MainWindow::on_connectButton_clicked()
@@ -504,7 +501,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
                 newMessageUsers.insert(sender);
 
                 if (currentUserStatus != "OCUPADO") {
-                    notificationMessage("Nuevo mensaje privado", QString("Mensaje de %1: %2").arg(sender, message));
+                    notificationMessage("Nuevo mensaje privado", QString("¡Tienes un mensaje de %1!").arg(sender, message));
                 } else {
                     qDebug() << "[DEBUG] Mensaje de" << sender << "ocultado por estado OCUPADO.";
                 }

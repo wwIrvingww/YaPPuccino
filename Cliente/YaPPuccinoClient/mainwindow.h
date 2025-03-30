@@ -53,6 +53,7 @@ private:
     QMap<QString, QDateTime> lastMessageTime;
     QSet<QString> newMessageUsers;
     bool useCode57 = true;
+    QString currentUserStatus = "ACTIVO";
 };
 
 #endif // MAINWINDOW_H

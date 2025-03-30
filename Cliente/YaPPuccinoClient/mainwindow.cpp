@@ -5,7 +5,19 @@
 #include <QDebug>
 #include <QTextBrowser>
 #include <QStringListModel>
+#include <QHostAddress>
+#include <QNetworkInterface>
 
+QString getLocalIPAddress() {
+    const QList<QHostAddress> &addresses = QNetworkInterface::allAddresses();
+    for (const QHostAddress &address : addresses) {
+        if (address.protocol() == QAbstractSocket::IPv4Protocol &&
+            !address.isLoopback()) {
+            return address.toString();
+        }
+    }
+    return "IP no disponible";
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -67,6 +79,7 @@ void MainWindow::on_connectButton_clicked()
 
     ui->statusbar->showMessage("Verificando usuario...");
     QUrl httpUrl = QUrl(QString("http://3.134.168.244:5000?name=%1").arg(username));
+
     auto *reply = http.get(QNetworkRequest(httpUrl));
     connect(reply, &QNetworkReply::finished, this, [this, reply, username]() {
         int code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -78,6 +91,10 @@ void MainWindow::on_connectButton_clicked()
             ui->statusbar->showMessage("Conectando WebSocket...");
             currentUser = username;
             socket.open(QUrl(QString("ws://3.134.168.244:5000?name=%1").arg(username)));
+
+            QString ipUsuario = getLocalIPAddress();
+            ui->ip->setText(ipUsuario);
+
         } else {
             ui->statusbar->showMessage("Error HTTP " + QString::number(code));
             QMessageBox::critical(this, "Error HTTP", "Código: " + QString::number(code));
@@ -373,6 +390,22 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
 
         // Si el cambio es del usuario actual
         if (username == currentUser) {
+
+            switch (stateCode) {
+            case 0: currentUserStatus = "DESACTIVADO"; break;
+            case 1: currentUserStatus = "ACTIVO"; break;
+            case 2: currentUserStatus = "OCUPADO"; break;
+            case 3: currentUserStatus = "INACTIVO"; break;
+            default: currentUserStatus = "DESCONOCIDO";
+            }
+
+            qDebug() << "[DEBUG] Estado actual del usuario:" << currentUserStatus;
+
+            if (stateCode == 2) {
+                QMessageBox::information(this, "Estado Ocupado",
+                                         "Estás en estado OCUPADO.\nLos mensajes nuevos no se mostrarán hasta que cambies a ACTIVO.");
+            }
+
             ui->changeStateComboBox->blockSignals(true);
 
             if (stateCode == 3) {
@@ -425,6 +458,12 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
     }
 
     if (code == 55) {
+
+        if (currentUserStatus == "OCUPADO") {
+            qDebug() << "[DEBUG] Usuario en estado OCUPADO. Mensaje ocultado.";
+            return;
+        }
+
         // Validar que hay al menos: len del remitente + remitente + len del mensaje + mensaje
         if (pos + 2 > data.size()) return;
 

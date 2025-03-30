@@ -61,9 +61,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->enviarMsgPriv, &QPushButton::clicked, this, &MainWindow::on_enviarMsgPriv_clicked);
 
-    trayIcon = new QSystemTrayIcon(this);
-    trayIcon->setIcon(QIcon(":/vergil.jpg"));
-    trayIcon->setVisible(true);
 
 }
 
@@ -72,6 +69,19 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+
+void MainWindow::notificationMessage(const QString &title, const QString &message)
+{
+    QMessageBox *notif = new QMessageBox(this);
+    notif->setWindowTitle(title);
+    notif->setText(message);
+    notif->setIcon(QMessageBox::Information);
+    notif->setStandardButtons(QMessageBox::NoButton);
+    notif->setWindowFlag(Qt::Tool);
+    notif->show();
+
+    QTimer::singleShot(3000, notif, &QMessageBox::close);
+}
 
 void MainWindow::on_connectButton_clicked()
 {
@@ -490,15 +500,14 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         if (sender != currentUser && sender != selectedPrivateUser){
             newMessageUsers.insert(sender);
 
-            if (currentUserStatus != "OCUPADO") {
-                trayIcon->showMessage(
-                    "Nuevo mensaje privado",
-                    QString("Mensaje de %1").arg(sender),
-                    QSystemTrayIcon::Information,
-                    4000
-                    );
-            } else {
-                qDebug() << "[DEBUG] Mensaje de" << sender << "ocultado por estado OCUPADO.";
+            if (sender != currentUser && sender != selectedPrivateUser) {
+                newMessageUsers.insert(sender);
+
+                if (currentUserStatus != "OCUPADO") {
+                    notificationMessage("Nuevo mensaje privado", QString("Mensaje de %1: %2").arg(sender, message));
+                } else {
+                    qDebug() << "[DEBUG] Mensaje de" << sender << "ocultado por estado OCUPADO.";
+                }
             }
 
         }

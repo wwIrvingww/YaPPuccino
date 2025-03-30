@@ -40,6 +40,7 @@ private slots:
     void on_historyGeneral_clicked();
     void on_historyPriv_clicked();
     void updateUserListModel();
+    void notificationMessage(const QString &title, const QString &message);
 
 private:
     Ui::MainWindow *ui;

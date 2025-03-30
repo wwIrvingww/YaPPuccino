@@ -148,7 +148,7 @@ void MainWindow::onSearchNameClicked()
 
 void MainWindow::onConnected()
 {
-    ui->statusbar->showMessage("Conectado ✅");
+    ui->statusbar->showMessage("!Estas conectado! ✅");
     QMessageBox::information(this, "Conexión", "Conectado correctamente al servidor.");
 
     qDebug() << "[DEBUG] useCode57 está en:" << (useCode57 ? "true (usando código 57)" : "false (usando código 51)");
@@ -298,19 +298,19 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         QString errorMsg;
         switch (errorCode) {
         case 1:
-            errorMsg = "¡Ups! El usuario no existe.";
+            errorMsg = "⚠️ ¡Ups! El usuario no existe.";
             break;
         case 2:
-            errorMsg = "¡El estatus enviado es inválido!";
+            errorMsg = "⚠️ ¡El estatus enviado es inválido!";
             break;
         case 3:
-            errorMsg = "¡El mensaje está vacío!";
+            errorMsg = "⚠️ ¡El mensaje está vacío!";
             break;
         case 4:
-            errorMsg = "¡El mensaje fue enviado a un usuario con estatus desconectado!";
+            errorMsg = "⚠️ ¡El mensaje fue enviado a un usuario con estatus desconectado!";
 
             if (!selectedPrivateUser.isEmpty()) {
-                QMessageBox::warning(this, "Error", "El usuario está desconectado/inactivo. No puedes continuar esta conversación.");
+                QMessageBox::warning(this, "Error", "¡El usuario está desconectado!. No puedes continuar esta conversación.");
 
                 ui->chatPriv->clear();
             }
@@ -414,13 +414,13 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
 
             if (stateCode == 2) {
                 QMessageBox::information(this, "Estado Ocupado",
-                                         "Estás en estado OCUPADO.\nLos mensajes nuevos no se mostrarán hasta que cambies a ACTIVO.");
+                                         "❗ Estás en estado OCUPADO.\nLos mensajes nuevos no se mostrarán hasta que cambies a ACTIVO.");
             }
 
             ui->changeStateComboBox->blockSignals(true);
 
             if (stateCode == 3) {
-                ui->statusbar->showMessage("Fuiste puesto en estado INACTIVO por inactividad.");
+                ui->statusbar->showMessage("⚠️ Fuiste puesto en estado INACTIVO por inactividad.");
 
                 // Limpiar opciones del combo
                 ui->changeStateComboBox->clear();
@@ -501,7 +501,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
                 newMessageUsers.insert(sender);
 
                 if (currentUserStatus != "OCUPADO") {
-                    notificationMessage("Nuevo mensaje privado", QString("¡Tienes un mensaje de %1!").arg(sender, message));
+                    notificationMessage("Nuevo mensaje privado", QString("💬 ¡Tienes un mensaje de %1!").arg(sender, message));
                 } else {
                     qDebug() << "[DEBUG] Mensaje de" << sender << "ocultado por estado OCUPADO.";
                 }
@@ -514,12 +514,20 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         // Actualizar la lista de usuarios para reordenar y agregar asterisco
         updateUserListModel();
 
-        // Mostrar el mensaje en el chat privado (según corresponda)
         if (sender == selectedPrivateUser) {
-            ui->chatPriv->appendHtml("<p style='margin: 8px 0'><b>" + sender + ":</b> " + message.toHtmlEscaped() + "</p>");
+            // Mensaje recibido: izquierda
+            ui->chatPriv->appendHtml(
+                "<p align='left' style='margin: 30px 0;'>"
+                "<b>" + sender + ":</b> " + message.toHtmlEscaped() + "</p>"
+                );
         } else if (sender == currentUser && !selectedPrivateUser.isEmpty()) {
-            ui->chatPriv->appendHtml("<p style='margin: 8px 0'><b>Tú:</b> " + message.toHtmlEscaped() + "</p>");
+            // Tu mensaje: derecha
+            ui->chatPriv->appendHtml(
+                "<p align='right' style='margin: 30px 0;'>"
+                "<b>Tú:</b> " + message.toHtmlEscaped() + "</p>"
+                );
         }
+
     }
 
     // Dentro de onBinaryMessageReceived, agrega la siguiente rama para code == 56 (RESPONSE_HISTORY)
@@ -663,7 +671,8 @@ void MainWindow::onUserItemClicked(const QModelIndex &index)
     updateUserListModel();
 
     ui->chatPriv->clear();
-    ui->chatPriv->appendPlainText("📨 Chat con " + username);
+    ui->chatPriv->appendHtml("<p><b>📨 Chat con " + username.toHtmlEscaped() + "</b></p>");
+
 }
 
 void MainWindow::on_enviarMsgPriv_clicked()
@@ -750,10 +759,13 @@ void MainWindow::updateUserListModel() {
     // Construir la lista final: si el usuario tiene mensajes nuevos, agregamos un asterisco.
     QStringList rows;
     for (const QString &user : users) {
+
+        if (user == currentUser) continue;
+
         QString estado = allUserStates.value(user, "DESCONOCIDO");
         QString display = QString("%1 → %2").arg(user, estado);
         if (newMessageUsers.contains(user))
-            display += " *";
+            display += " 🔔";
         rows << display;
     }
     fullUserModel->setStringList(rows);

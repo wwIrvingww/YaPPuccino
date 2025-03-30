@@ -154,6 +154,7 @@
     <property name="font">
      <font>
       <pointsize>16</pointsize>
+      <bold>true</bold>
      </font>
     </property>
     <property name="text">
@@ -189,15 +190,16 @@
    <widget class="QLabel" name="label_7">
     <property name="geometry">
      <rect>
-      <x>830</x>
-      <y>130</y>
-      <width>271</width>
+      <x>820</x>
+      <y>140</y>
+      <width>201</width>
       <height>51</height>
      </rect>
     </property>
     <property name="font">
      <font>
       <pointsize>16</pointsize>
+      <bold>true</bold>
      </font>
     </property>
     <property name="text">
@@ -229,6 +231,7 @@
     <property name="font">
      <font>
       <pointsize>16</pointsize>
+      <bold>true</bold>
      </font>
     </property>
     <property name="text">
@@ -268,6 +271,7 @@
     <property name="font">
      <font>
       <pointsize>14</pointsize>
+      <bold>true</bold>
      </font>
     </property>
     <property name="text">
@@ -331,20 +335,10 @@
      </rect>
     </property>
    </widget>
-   <widget class="QPlainTextEdit" name="chatPriv">
-    <property name="geometry">
-     <rect>
-      <x>960</x>
-      <y>190</y>
-      <width>271</width>
-      <height>491</height>
-     </rect>
-    </property>
-   </widget>
    <widget class="QPushButton" name="historyGeneral">
     <property name="geometry">
      <rect>
-      <x>400</x>
+      <x>680</x>
       <y>150</y>
       <width>121</width>
       <height>31</height>
@@ -362,8 +356,8 @@
    <widget class="QPushButton" name="historyPriv">
     <property name="geometry">
      <rect>
-      <x>1060</x>
-      <y>140</y>
+      <x>1110</x>
+      <y>150</y>
       <width>121</width>
       <height>31</height>
      </rect>
@@ -449,6 +443,16 @@
     </property>
     <property name="text">
      <string>IP del usuario:</string>
+    </property>
+   </widget>
+   <widget class="QPlainTextEdit" name="chatPriv">
+    <property name="geometry">
+     <rect>
+      <x>960</x>
+      <y>190</y>
+      <width>271</width>
+      <height>491</height>
+     </rect>
     </property>
    </widget>
   </widget>

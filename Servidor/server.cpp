@@ -419,7 +419,11 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                         std::string dest(pm.fields[0].begin(), pm.fields[0].end());
                         std::string message(pm.fields[1].begin(), pm.fields[1].end());
 
-                        appendToHistory(username, message);
+                        if (dest == "~") {
+                            appendToHistory("~", message);  // mensaje general
+                        } else {
+                            appendPrivateHistory(username, dest, message);  // mensaje privado
+                        }                                            
 
                         std::string mensajeTexto = username + ": " + message;
 
@@ -447,18 +451,16 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                         // Si el mensaje es para el chat general, el destino es "~"
                         if (dest == "~")
                         {
-                            {
-                                std::lock_guard<std::mutex> lock(clients_mutex);
-                                for(auto &p : connectedUsers)
-                                    snapshot.push_back(p.second);
-                            }
+                            const std::string anon = "~"; // identificador anónimo
+                            auto binOut = buildBinaryMessage(MessageCode::MESSAGE_RECEIVED, {
+                                std::vector<unsigned char>(anon.begin(), anon.end()),
+                                std::vector<unsigned char>(message.begin(), message.end())
+                            });
+
                             for (auto &[user, info] : connectedUsers)
                             {
-                                // Enviar el mensaje solo a usuarios que estén en estado ACTIVE o BUSY.
                                 if (info.status == UserStatus::ACTIVE || info.status == UserStatus::BUSY)
                                 {
-                                    auto binOut = buildBinaryMessage(MessageCode::MESSAGE_RECEIVED, {std::vector<unsigned char>(username.begin(), username.end()),
-                                                                                                     std::vector<unsigned char>(message.begin(), message.end())});
                                     sendBinaryMessage(info.ws, binOut);
                                 }
                             }
@@ -472,8 +474,6 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
                                 for(auto &p : connectedUsers)
                                     snapshot.push_back(p.second);
                             }
-
-                            appendPrivateHistory(username, dest, message);
 
                             // Solo envia mensajes a los activos y ocupadsos
                             if (connectedUsers.count(dest) && connectedUsers[dest].status == UserStatus::ACTIVE || connectedUsers[dest].status == UserStatus::BUSY || connectedUsers[dest].status == UserStatus::INACTIVE)
@@ -494,7 +494,7 @@ void handleClient(std::shared_ptr<websocket::stream<tcp::socket>> ws, std::strin
 
                         if (dest == "~"){
                             std::cout << "→ Mensaje de " << username << " enviado al chat general: " << message << std::endl;    
-                            broadcastTextMessage(mensajeTexto);
+                            
                         } else {
                             std::cout << "→ Mensaje de " << username << " enviado a " << dest << ": " << message << std::endl;
 

@@ -56,7 +56,7 @@ private:
     QString selectedPrivateUser;
     QMap<QString, QDateTime> lastMessageTime;
     QSet<QString> newMessageUsers;
-    bool useCode57 = true;
+    bool useCode57 = false;
     QString currentUserStatus = "ACTIVO";
     QSystemTrayIcon *trayIcon;
 };

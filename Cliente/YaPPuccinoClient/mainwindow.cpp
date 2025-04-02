@@ -203,6 +203,8 @@ void MainWindow::on_enviarMsgGeneral_clicked()
 
     socket.sendBinaryMessage(data);
 
+    qDebug() << "[DEBUG] Enviando mensaje general (code 4):" << data.toHex(' ').toUpper();
+
     // Mostrarlo como enviado
     ui->chatGeneralTextEdit->append(
         "<p align='right'><b>Tú:</b> " + text.toHtmlEscaped() + "</p>"
@@ -724,6 +726,8 @@ void MainWindow::on_enviarMsgPriv_clicked()
     data.append(msgBytes);
 
     socket.sendBinaryMessage(data);
+
+    qDebug() << "[DEBUG] Enviando mensaje general (code 4):" << data.toHex(' ').toUpper();
 
     ui->privMsgTextEdit->clear();
 }

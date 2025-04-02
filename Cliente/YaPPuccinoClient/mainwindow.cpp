@@ -148,7 +148,7 @@ void MainWindow::onSearchNameClicked()
 
 void MainWindow::onConnected()
 {
-    ui->statusbar->showMessage("!Estas conectado! ✅");
+    ui->statusbar->showMessage("¡Estas conectado! ✅");
     QMessageBox::information(this, "Conexión", "Conectado correctamente al servidor.");
 
     qDebug() << "[DEBUG] useCode57 está en:" << (useCode57 ? "true (usando código 57)" : "false (usando código 51)");
@@ -193,12 +193,20 @@ void MainWindow::on_enviarMsgGeneral_clicked()
     QString text = ui->msgGeneralTextEdit->toPlainText().trimmed();
     if (text.isEmpty()) return;
 
-    socket.sendTextMessage(text);
+    QByteArray data;
+    data.append(char(4)); // SEND_MESSAGE
+    data.append(char(1)); // len del destinatario (~)
+    data.append("~");     // receptor: general
+    QByteArray msg = text.toUtf8();
+    data.append(char(msg.length())); // len del mensaje
+    data.append(msg);                // mensaje
 
+    socket.sendBinaryMessage(data);
+
+    // Mostrarlo como enviado
     ui->chatGeneralTextEdit->append(
-        "<p align='right'><b>You:</b> " + text.toHtmlEscaped() + "</p>"
+        "<p align='right'><b>Tú:</b> " + text.toHtmlEscaped() + "</p>"
         );
-
 
     ui->msgGeneralTextEdit->clear();
 }
@@ -412,6 +420,12 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
 
             qDebug() << "[DEBUG] Estado actual del usuario:" << currentUserStatus;
 
+            if (stateCode == 1) {
+                ui->statusbar->showMessage("✅ Has vuelto a estar ACTIVO.");
+            } else {
+                ui->statusbar->clearMessage();
+            }
+
             if (stateCode == 2) {
                 QMessageBox::information(this, "Estado Ocupado",
                                          "❗ Estás en estado OCUPADO.\nLos mensajes nuevos no se mostrarán hasta que cambies a ACTIVO.");
@@ -484,6 +498,14 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         if (pos + msgLen > data.size()) return;
         QString message = QString::fromUtf8(reinterpret_cast<const char*>(bytes + pos), msgLen);
         pos += msgLen;
+
+        if (sender == "~") {
+            // Mensaje general
+            ui->chatGeneralTextEdit->append(
+                "<p align='left'><i>(Mensaje general)</i> " + message.toHtmlEscaped() + "</p>"
+                );
+            return; // No seguir procesando como mensaje privado
+        }
 
         qDebug() << "[PRIVADO] Remitente:" << sender
                  << "| Destinatario esperado:" << selectedPrivateUser

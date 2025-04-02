@@ -27,30 +27,30 @@ ParsedMessage parseBinaryMessage(const std::vector<unsigned char>& buffer);
 // Códigos de mensaje según el protocolo
 namespace MessageCode {
     // Mensajes enviados por el cliente al servidor
-    const uint8_t LIST_USERS     = 1;
-    const uint8_t GET_USER       = 2;
-    const uint8_t CHANGE_STATUS  = 3;
-    const uint8_t SEND_MESSAGE   = 4;
-    const uint8_t GET_HISTORY    = 5;
-    const uint8_t LIST_ALL_USERS = 6;
+    const uint8_t LIST_USERS     = 0x01;
+    const uint8_t GET_USER       = 0x02;
+    const uint8_t CHANGE_STATUS  = 0x03;
+    const uint8_t SEND_MESSAGE   = 0x04;
+    const uint8_t GET_HISTORY    = 0x05;
+    const uint8_t LIST_ALL_USERS = 0x06;
 
     // Respuestas y notificaciones del servidor
-    const uint8_t ERROR_RESPONSE       = 50;
-    const uint8_t RESPONSE_LIST_USERS  = 51;
-    const uint8_t RESPONSE_GET_USER    = 52;
-    const uint8_t USER_REGISTERED      = 53;
-    const uint8_t USER_STATUS_CHANGED  = 54;
-    const uint8_t MESSAGE_RECEIVED     = 55;
-    const uint8_t RESPONSE_HISTORY     = 56;
-    const uint8_t RESPONSE_ALL_USERS   = 57;
+    const uint8_t ERROR_RESPONSE       = 0x50;
+    const uint8_t RESPONSE_LIST_USERS  = 0x51;
+    const uint8_t RESPONSE_GET_USER    = 0x52;
+    const uint8_t USER_REGISTERED      = 0x53;
+    const uint8_t USER_STATUS_CHANGED  = 0x54;
+    const uint8_t MESSAGE_RECEIVED     = 0x55;
+    const uint8_t RESPONSE_HISTORY     = 0x56;
+    const uint8_t RESPONSE_ALL_USERS   = 0x57;
 }
 
 // Códigos de error definidos en el protocolo
 namespace ErrorCode {
-    const uint8_t USER_NOT_FOUND     = 1;
-    const uint8_t INVALID_STATUS     = 2;
-    const uint8_t EMPTY_MESSAGE      = 3;
-    const uint8_t USER_DISCONNECTED  = 4;
+    const uint8_t USER_NOT_FOUND     = 0x01;
+    const uint8_t INVALID_STATUS     = 0x02;
+    const uint8_t EMPTY_MESSAGE      = 0x03;
+    const uint8_t USER_DISCONNECTED  = 0x04;
 }
 
 #endif // BINARY_MESSAGE_HANDLER_H

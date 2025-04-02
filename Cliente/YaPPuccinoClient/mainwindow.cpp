@@ -198,10 +198,12 @@ void MainWindow::on_enviarMsgGeneral_clicked()
     data.append(char(1)); // len del destinatario (~)
     data.append("~");     // receptor: general
     QByteArray msg = text.toUtf8();
-    data.append(char(msg.length())); // len del mensaje
+    data.append(static_cast<unsigned char>(msg.length())); // len del mensaje
     data.append(msg);                // mensaje
 
     socket.sendBinaryMessage(data);
+
+    qDebug() << "[DEBUG] Enviando mensaje general (code 4):" << data.toHex(' ').toUpper();
 
     // Mostrarlo como enviado
     ui->chatGeneralTextEdit->append(
@@ -228,7 +230,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
     int pos = 0;
     uint8_t code = bytes[pos++];
 
-    if (code == 51) {
+    if (code == 81) {
         if (pos >= data.size()) return;
 
         uint8_t numUsers = bytes[pos++];
@@ -295,7 +297,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         return;
     }
 
-    if (code == 50) {
+    if (code == 80) {
         if (pos >= data.size()) {
             ui->statusbar->showMessage("Error: código de error no recibido.");
             return;
@@ -334,7 +336,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         return;
     }
 
-    if (code == 52) {
+    if (code == 82) {
         // Validar que al menos hay un byte para len
         if (pos >= data.size()) {
             ui->mostrarNombre->setText("Error: mensaje incompleto.");
@@ -371,7 +373,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         return;
     }
 
-    if (code == 54) {
+    if (code == 84) {
         if (pos + 2 > data.size()) return;
 
         uint8_t nameLen = bytes[pos++];
@@ -482,7 +484,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         return;
     }
 
-    if (code == 55) {
+    if (code == 85) {
 
         // Validar que hay al menos: len del remitente + remitente + len del mensaje + mensaje
         if (pos + 2 > data.size()) return;
@@ -553,7 +555,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
     }
 
     // Dentro de onBinaryMessageReceived, agrega la siguiente rama para code == 56 (RESPONSE_HISTORY)
-    else if (code == 56) { // RESPONSE_HISTORY
+    else if (code == 86) { // RESPONSE_HISTORY
         qDebug() << "[HISTORIAL] Se recibió código 56";
         int pos = 1; // Ya se consumió el code (data[0])
         if (pos >= data.size()) return;
@@ -597,7 +599,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         ui->statusbar->showMessage("Historial recibido: " + QString::number(num) + " mensajes.");
     }
 
-    if (code == 57) {
+    if (code == 87) {
 
         qDebug() << "[DEBUG] Procesando respuesta con código 57 (usuarios completos)";
 
@@ -718,12 +720,14 @@ void MainWindow::on_enviarMsgPriv_clicked()
     QByteArray userBytes = selectedPrivateUser.toUtf8();
     QByteArray msgBytes = msg.toUtf8();
 
-    data.append(char(userBytes.length()));
+    data.append(static_cast<unsigned char>(userBytes.length()));
     data.append(userBytes);
-    data.append(char(msgBytes.length()));
+    data.append(static_cast<unsigned char>(msgBytes.length()));
     data.append(msgBytes);
 
     socket.sendBinaryMessage(data);
+
+    qDebug() << "[DEBUG] Enviando mensaje general (code 4):" << data.toHex(' ').toUpper();
 
     ui->privMsgTextEdit->clear();
 }

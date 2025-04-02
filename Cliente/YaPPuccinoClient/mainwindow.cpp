@@ -230,7 +230,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
     int pos = 0;
     uint8_t code = bytes[pos++];
 
-    if (code == 81) {
+    if (code == 51) {
         if (pos >= data.size()) return;
 
         uint8_t numUsers = bytes[pos++];
@@ -297,7 +297,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         return;
     }
 
-    if (code == 80) {
+    if (code == 50) {
         if (pos >= data.size()) {
             ui->statusbar->showMessage("Error: código de error no recibido.");
             return;
@@ -336,7 +336,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         return;
     }
 
-    if (code == 82) {
+    if (code == 52) {
         // Validar que al menos hay un byte para len
         if (pos >= data.size()) {
             ui->mostrarNombre->setText("Error: mensaje incompleto.");
@@ -373,7 +373,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         return;
     }
 
-    if (code == 84) {
+    if (code == 54) {
         if (pos + 2 > data.size()) return;
 
         uint8_t nameLen = bytes[pos++];
@@ -484,7 +484,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         return;
     }
 
-    if (code == 85) {
+    if (code == 55) {
 
         // Validar que hay al menos: len del remitente + remitente + len del mensaje + mensaje
         if (pos + 2 > data.size()) return;
@@ -555,7 +555,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
     }
 
     // Dentro de onBinaryMessageReceived, agrega la siguiente rama para code == 56 (RESPONSE_HISTORY)
-    else if (code == 86) { // RESPONSE_HISTORY
+    else if (code == 56) { // RESPONSE_HISTORY
         qDebug() << "[HISTORIAL] Se recibió código 56";
         int pos = 1; // Ya se consumió el code (data[0])
         if (pos >= data.size()) return;
@@ -599,7 +599,7 @@ void MainWindow::onBinaryMessageReceived(const QByteArray &data)
         ui->statusbar->showMessage("Historial recibido: " + QString::number(num) + " mensajes.");
     }
 
-    if (code == 87) {
+    if (code == 57) {
 
         qDebug() << "[DEBUG] Procesando respuesta con código 57 (usuarios completos)";
 
